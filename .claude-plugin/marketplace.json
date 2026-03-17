@@ -1,0 +1,5 @@
+{
+  "name": "python-workers",
+  "description": "Skill for building Cloudflare Workers in Python (Pyodide runtime)",
+  "skills": ["skill"]
+}

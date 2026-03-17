@@ -1,0 +1,23 @@
+{
+  "skill_name": "python-workers",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "I want to build a REST API on Cloudflare Workers using Python and FastAPI. It needs a D1 database for storing bookmarks (url, title, created_at). Set up the project structure, wrangler config, and a basic CRUD handler.",
+      "expected_output": "Complete project setup with wrangler.jsonc (python_workers flag, python_dedicated_snapshot, D1 binding), pyproject.toml, FastAPI ASGI bridge using request.js_object, FFI boundary layer with HAS_PYODIDE guard, D1 row conversion with .to_py()",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "My Python Worker queries D1 and returns the results as JSON but I'm getting `TypeError: 'pyodide.ffi.JsProxy' object is not subscriptable` when I try to iterate over the rows. Here's my code:\n```python\nclass Default(WorkerEntrypoint):\n    async def fetch(self, request):\n        results = await self.env.DB.prepare('SELECT * FROM users').all()\n        users = []\n        for row in results.results:\n            users.append({'id': row['id'], 'name': row['name']})\n        return Response.json(users)\n```",
+      "expected_output": "Identifies that results.results is JsProxy, shows the fix with .to_py() conversion, recommends boundary layer pattern",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "I have a Python Worker with D1 and Queues. How do I set up pytest to test it? The Worker code imports `from pyodide.ffi import to_js` and `import js` so it crashes when I try to import it in regular Python.",
+      "expected_output": "HAS_PYODIDE guard pattern, MockD1/MockQueue implementations, pyproject.toml pytest config, Pyodide fakes for testing FFI branches, three-tier testing strategy",
+      "files": []
+    }
+  ]
+}

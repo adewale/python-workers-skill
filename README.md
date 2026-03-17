@@ -23,14 +23,17 @@ claude skill install adewale/python-workers-skill
 ## Files
 
 ```
-SKILL.md                                  # Skill definition, decision trees, anti-patterns
-references/python-workers/
-├── README.md                              # Runtime overview, quick start, project structure
-├── api.md                                 # Handlers, Response, FFI, bindings, Workflows
-├── configuration.md                       # wrangler.jsonc, packages, flags, testing setup
-├── gotchas.md                             # 18 Python-specific issues
-└── patterns.md                            # FFI boundary, D1 conversion, Static Assets, DOs, testing
+skill/                                     # The installable skill
+├── SKILL.md                               # Skill definition, decision trees, anti-patterns
+└── references/python-workers/
+    ├── README.md                          # Runtime overview, quick start, project structure
+    ├── api.md                             # Handlers, Response, FFI, bindings, Workflows
+    ├── configuration.md                   # wrangler.jsonc, packages, flags, testing setup
+    ├── gotchas.md                         # 18 Python-specific issues
+    └── patterns.md                        # FFI boundary, D1 conversion, Static Assets, DOs, testing
 BEST_PRACTICES.md                          # Human-readable mirror (for review/feedback)
+tests/                                     # Evals
+└── evals.json
 ```
 
 ## Contributing
