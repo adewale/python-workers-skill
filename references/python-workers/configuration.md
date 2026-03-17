@@ -19,7 +19,7 @@ Python-specific configuration only. For general wrangler.jsonc binding setup (D1
 
 ## Wrangler Config Format
 
-**Use `wrangler.jsonc`** (JSON with comments) for all new projects. `wrangler.toml` is legacy — some newer Wrangler features are only available in JSON config files. `pywrangler init` and `npm create cloudflare` both generate `wrangler.jsonc` by default.
+**Use `wrangler.jsonc`** (JSON with comments) for new projects. `wrangler.toml` is still supported but `wrangler.jsonc` is the default — `pywrangler init` and `npm create cloudflare` both generate it. Some newer Wrangler features may only be available in JSON config.
 
 ## Python-Specific wrangler.jsonc
 
@@ -156,6 +156,7 @@ uv run pywrangler types
 - `Jinja2` — templating
 - `bleach` — HTML sanitization
 - `beautifulsoup4` — HTML parsing (without lxml backend)
+- `Pydantic` — data validation and settings
 
 ### Adding packages
 

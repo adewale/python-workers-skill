@@ -492,6 +492,17 @@ class Counter(DurableObject):
         return Response.json({"count": count})
 ```
 
+Durable Objects also have embedded SQL via `self.ctx.storage.sql`:
+
+```python
+class MyDO(DurableObject):
+    async def fetch(self, request):
+        result = self.ctx.storage.sql.exec(
+            "SELECT 'Hello, World!' as greeting"
+        ).one()
+        return Response(result.greeting)
+```
+
 Wrangler config for DO migrations:
 ```jsonc
 "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Counter"] }]

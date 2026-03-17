@@ -58,14 +58,15 @@ class Default(WorkerEntrypoint):
 
 ```python
 class Default(WorkerEntrypoint):
-    async def scheduled(self, controller):
+    async def scheduled(self, controller, env, ctx):
         # controller.scheduledTime — when the cron fired
         # controller.cron — the cron pattern that matched
         print(f"Cron triggered: {controller.cron}")
-        await self.env.FEED_QUEUE.send({"action": "refresh"})
+        await env.FEED_QUEUE.send({"action": "refresh"})
+        # self.env also works — env and self.env are the same object
 ```
 
-**Key difference from JS**: This is a method on the class, not a separate `export`. The old `@handler` + `on_scheduled` function pattern was deprecated August 2025 (see gotchas.md #1).
+**Key difference from JS**: This is a method on the class, not a separate `export`. The official signature includes `env` and `ctx` parameters (same as JS). `self.env` also works. The old `@handler` + `on_scheduled` function pattern was deprecated August 2025 (see gotchas.md #1).
 
 ### queue — Queue Message Batches
 
@@ -85,7 +86,7 @@ class Default(WorkerEntrypoint):
 ```python
 class Default(WorkerEntrypoint):
     async def fetch(self, request): ...
-    async def scheduled(self, controller): ...
+    async def scheduled(self, controller, env, ctx): ...
     async def queue(self, batch): ...
 ```
 
@@ -287,6 +288,8 @@ class Default(WorkerEntrypoint):
         await self.env.FEED_QUEUE.send(
             to_js({"feed_id": 1}, dict_converter=Object.fromEntries)
         )
+        # For text payloads, use contentType:
+        await self.env.FEED_QUEUE.send("hello", contentType="text")
 
         # Vectorize — both input and output need conversion
         js_vector = to_js(query_vector)
@@ -317,36 +320,38 @@ class Default(WorkerEntrypoint):
 
 ### Workflows
 
-Python Workers can define multi-step Workflows using `WorkflowEntrypoint`. Steps declare dependencies and can run concurrently:
+Python Workers can define multi-step Workflows using `WorkflowEntrypoint`. Steps use the `@step.do()` decorator, with dependencies injected automatically by argument name:
 
 ```python
 from workers import WorkflowEntrypoint, WorkerEntrypoint, Response
 
 class MyWorkflow(WorkflowEntrypoint):
     async def run(self, event, step):
-        @step.do("fetch data")
+        @step.do()
         async def fetch_data():
             result = await self.env.DB.prepare("SELECT * FROM feeds").all()
             return [dict(r) for r in result.results.to_py()]
 
-        @step.do("process", depends=[fetch_data])
-        async def process():
-            data = fetch_data.result
-            # ... process data
-            return {"processed": len(data)}
+        @step.do()
+        async def process(fetch_data):
+            # Dependency injected by argument name — receives fetch_data's return value
+            return {"processed": len(fetch_data)}
 
-        @step.do("notify", depends=[process])
-        async def notify():
-            await self.env.QUEUE.send(process.result)
+        @step.do()
+        async def notify(process):
+            await self.env.QUEUE.send(process)
 
         # Steps with concurrent=True run in parallel
-        @step.do("task_a", concurrent=True)
+        @step.do(concurrent=True)
         async def task_a():
             return "a"
 
-        @step.do("task_b", concurrent=True)
+        @step.do(concurrent=True)
         async def task_b():
             return "b"
+
+        # Await the final step to get its result
+        result = await notify()
 
 # Trigger from another Worker
 class Default(WorkerEntrypoint):
