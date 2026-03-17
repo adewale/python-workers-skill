@@ -12,6 +12,9 @@ For the bindings themselves (D1 SQL syntax, KV methods, Queue config), see the [
 - [Response (Python Wrapper)](#response)
 - [FFI — JavaScript/Python Boundary](#ffi)
 - [Binding Access From Python](#binding-access-from-python)
+  - [Service Bindings — Python RPC Methods](#service-bindings--python-rpc-methods)
+  - [Workflows](#workflows)
+  - [`workers.fetch()` — Outbound HTTP](#workersfetch--outbound-http)
 - [Logging](#logging)
 - [Reading Bundled Files](#reading-bundled-files)
 
@@ -105,7 +108,7 @@ Response("OK", headers={"Content-Type": "text/plain"})
 # JSON (serializes Python dict automatically)
 Response.json({"key": "value"})
 
-# Binary
+# Binary (small payloads — see below for large binary)
 Response(image_bytes, headers={"Content-Type": "image/png"})
 
 # Redirect
@@ -114,6 +117,25 @@ Response(None, status=302, headers={"Location": "/new-path"})
 # WebSocket upgrade
 Response(None, status=101, web_socket=client_ws)
 ```
+
+### Binary Response (images, files)
+
+For returning binary data, Python `bytes` must be converted to a JS `ArrayBuffer`:
+
+```python
+# Binary data — must convert bytes to JS ArrayBuffer
+from pyodide.ffi import to_js
+
+image_bytes = generate_image()  # Python bytes
+body = to_js(image_bytes).buffer  # Convert to ArrayBuffer
+
+return Response(body, headers={
+    "Content-Type": "image/png",
+    "Cache-Control": "public, max-age=86400"
+})
+```
+
+Note: `to_js(bytes)` creates a `Uint8Array`; `.buffer` extracts the underlying `ArrayBuffer` for the Response constructor.
 
 **When using `js.Response` directly** (not the `workers` wrapper), you must call `.new()`:
 
@@ -208,6 +230,37 @@ def _is_js_undefined(value):
             and str(value) == "undefined")
 ```
 
+### FFI Type-Compatibility Matrix
+
+What happens when Python types cross to JS and vice versa. This table prevents silent failures at the FFI boundary.
+
+**Python to JavaScript (Outbound):**
+
+| Python Type | Becomes in JS | D1 `.bind()` | R2 `.put()` | Queue `.send()` | Notes |
+|-------------|---------------|:---:|:---:|:---:|-------|
+| `str` | `string` | OK | OK | OK | |
+| `int` | `number` | OK | OK | OK | |
+| `float` | `number` | OK | OK | OK | |
+| `bool` | `boolean` | OK | OK | OK | |
+| `None` | `undefined` | **BREAKS** | OK | OK | D1 rejects `undefined`; use `JS_NULL` |
+| `dict` | `Map` | N/A | N/A | **Fails silently** | Use `to_js(d, dict_converter=Object.fromEntries)` |
+| `list` | `Array` | N/A | OK | OK | Via `to_js()` |
+| `bytes` | `PyProxy` | **BREAKS** | **BREAKS** | **BREAKS** | Must use `to_js(data)` to get Uint8Array |
+| `datetime` | `PyProxy` | **BREAKS** | **BREAKS** | **BREAKS** | Must convert to ISO string first |
+
+**JavaScript to Python (Inbound):**
+
+| JS Type | Arrives as in Python | Subscriptable? | `.to_py()` | Notes |
+|---------|---------------------|:-:|:-:|-------|
+| `Object` | `JsProxy` | No | `dict` | Must call `.to_py()` |
+| `Array` | `JsProxy` | No | `list` | Not iterable as Python list |
+| `null` | `JsNull` | N/A | N/A | **NOT** Python `None`; `type(x).__name__ == "JsNull"` |
+| `undefined` | `JsUndefined` | N/A | N/A | **NOT** Python `None` |
+| `string` | `str` | N/A | N/A | Auto-converted |
+| `number` | `int`/`float` | N/A | N/A | Auto-converted |
+| `boolean` | `bool` | N/A | N/A | Auto-converted |
+| `ArrayBuffer` | `JsProxy` | N/A | `bytes` | Via `.to_bytes()` |
+
 ---
 
 ## Binding Access From Python
@@ -258,6 +311,67 @@ class Default(WorkerEntrypoint):
     async def highlight_code(self, code: str, language: str = None) -> dict:
         """Custom RPC method — callable via Service Binding."""
         return {"html": highlighted, "language": language}
+```
+
+**Note**: Python RPC methods that return `dict` will arrive as a JavaScript `Map` on the caller side (same issue as gotchas.md #6 — `dict` without `dict_converter` becomes `Map`). If the caller is a TypeScript Worker, they receive `Map<string, string>`, not a plain object.
+
+### Workflows
+
+Python Workers can define multi-step Workflows using `WorkflowEntrypoint`. Steps declare dependencies and can run concurrently:
+
+```python
+from workers import WorkflowEntrypoint, WorkerEntrypoint, Response
+
+class MyWorkflow(WorkflowEntrypoint):
+    async def run(self, event, step):
+        @step.do("fetch data")
+        async def fetch_data():
+            result = await self.env.DB.prepare("SELECT * FROM feeds").all()
+            return [dict(r) for r in result.results.to_py()]
+
+        @step.do("process", depends=[fetch_data])
+        async def process():
+            data = fetch_data.result
+            # ... process data
+            return {"processed": len(data)}
+
+        @step.do("notify", depends=[process])
+        async def notify():
+            await self.env.QUEUE.send(process.result)
+
+        # Steps with concurrent=True run in parallel
+        @step.do("task_a", concurrent=True)
+        async def task_a():
+            return "a"
+
+        @step.do("task_b", concurrent=True)
+        async def task_b():
+            return "b"
+
+# Trigger from another Worker
+class Default(WorkerEntrypoint):
+    async def fetch(self, request):
+        workflow = await self.env.MY_WORKFLOW.create()
+        return Response.json({"id": workflow.id})
+```
+
+Wrangler config:
+```jsonc
+"workflows": [{ "name": "my-workflow", "binding": "MY_WORKFLOW", "class_name": "MyWorkflow" }]
+```
+
+Requires compatibility flags: `"python_workers"`, `"python_workflows"`, `"experimental"`.
+
+### `workers.fetch()` — Outbound HTTP
+
+`workers.fetch()` wraps the JS `fetch()` API directly. It is always available without package installation — distinct from `httpx`:
+
+```python
+from workers import fetch
+
+# Outbound HTTP from a Worker (wraps JS fetch)
+response = await fetch("https://example.com/api")
+data = await response.json()  # JsProxy — call .to_py()
 ```
 
 ---

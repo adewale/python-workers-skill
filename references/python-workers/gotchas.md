@@ -22,6 +22,10 @@ Issues that are **specific to Python Workers**. General Cloudflare Workers issue
 | 12 | Stdlib limitations | ImportError | Check list below |
 | 13 | Native packages fail | ModuleNotFoundError | Use Pyodide-compatible alternatives |
 | 14 | Mocks pass, prod fails | JsProxy bugs in production | Add E2E tests against real infra |
+| 15 | bytes crosses as PyProxy | R2/KV rejects Python bytes | Use `to_js(data)` for Uint8Array |
+| 16 | Cold start cancels queue | First queue msg canceled, retried | Inherent behavior — don't chase it |
+| 17 | Miniflare queue unreliable | Queue msgs never delivered locally | Use `POST /process-now` for local dev |
+| 18 | Large binary round-trip | Worker crash on >10MB R2 objects | Bypass Python — pass ReadableStream to JS Response |
 
 ---
 
@@ -106,13 +110,26 @@ JS_NULL = js.JSON.parse("null")
 await env.DB.prepare("UPDATE feeds SET etag = ?").bind(JS_NULL).run()
 ```
 
-JS `undefined` can also arrive as a JsProxy in Python — detect with:
+**`is None` is never enough at the FFI boundary.** JS `null` and `undefined` both arrive as distinct JsProxy types — neither is Python `None`:
+
+| Value | `is None` | `bool()` | `type().__name__` |
+|-------|:---------:|:--------:|:------------------:|
+| Python `None` | `True` | `False` | `NoneType` |
+| JS `null` (JsNull) | **`False`** | `False` | `JsNull` |
+| JS `undefined` (JsUndefined) | **`False`** | `False` | `JsUndefined` |
+
+**Rule**: Any boundary code with `if x is None` must also check for JsNull and JsUndefined. Use a helper:
 
 ```python
-def _is_js_undefined(value):
+def _is_js_null_or_undefined(value):
+    """Check for JS null or undefined — both are falsy but NOT Python None."""
     if value is None:
         return False
-    return str(type(value)) == "<class 'pyodide.ffi.JsProxy'>" and str(value) == "undefined"
+    return type(value).__name__ in ("JsNull", "JsUndefined")
+
+def _is_missing(value):
+    """True for Python None, JS null, or JS undefined."""
+    return value is None or _is_js_null_or_undefined(value)
 ```
 
 ---
@@ -129,6 +146,14 @@ JS_NULL = js.eval("null")
 
 # CORRECT
 JS_NULL = js.JSON.parse("null")
+```
+
+**Watch out for libraries that use js.eval() internally.** Some Python libraries call `js.eval()` under the hood to load JS dependencies. Example: `python-readability` loads Mozilla Readability via `js.eval()` and will fail with the same error. The workaround for JS-native functionality is a Service Binding to a JS Worker:
+
+```python
+# Instead of a Python library that uses js.eval():
+# Deploy a JS Worker with the npm package, then call via Service Binding
+result = await self.env.READABILITY_SERVICE.extract(url, html)
 ```
 
 ---
@@ -282,6 +307,8 @@ Check: https://pyodide.org/en/stable/usage/packages-in-pyodide.html
 | `cryptography` | `hashlib`/`hmac` from stdlib |
 | `requests` | `httpx` (async) |
 
+**lxml deserves special attention.** It is a C extension built on libxml2/libxslt, unavailable in Pyodide. This eliminates most Python HTML processing libraries that depend on it: Trafilatura, Newspaper4k, Goose3, ReadabiliPy, readability-lxml, jusText, and Inscriptis. Always check the **full dependency tree** for C extensions before choosing any library — a transitive dependency on lxml is enough to break your Worker.
+
 Request new packages: https://github.com/cloudflare/workerd/discussions/categories/python-packages
 
 ---
@@ -308,3 +335,75 @@ E2E tests catch:
 - Vectorize similarity scoring (mocks return fixed scores)
 - Workers AI embedding dimensions
 - Queue message serialization round-trips
+
+---
+
+## #15: Python `bytes` Cannot Cross FFI to R2/KV
+
+**Symptom**: R2 `.put()`, KV `.put()`, or other binary APIs silently fail or reject the value.
+
+Python `bytes` crosses the FFI as a `PyProxy`, not a `Uint8Array`. APIs that expect binary data will reject it.
+
+```python
+# WRONG — PyProxy, R2 rejects it
+await env.BUCKET.put("key", my_bytes)
+
+# CORRECT — Uint8Array
+from pyodide.ffi import to_js
+await env.BUCKET.put("key", to_js(my_bytes))
+```
+
+This applies to any API expecting binary: R2, KV (binary values), WebSocket `.send()` with binary frames.
+
+---
+
+## #16: Pyodide Cold Start Cancels First Queue Invocation
+
+**Symptom**: Queue messages take 30-60s longer than expected. `process-now` endpoint works instantly. No logs, no exceptions.
+
+When a queue message hits a **cold** Python Worker isolate, the Workers runtime cancels the first invocation (outcome: "canceled", zero logs, zero exceptions). The automatic retry succeeds because the isolate is now warm.
+
+This is **not a bug** — it is inherent platform behavior due to Pyodide's cold start exceeding the queue consumer timeout. Do not chase it.
+
+---
+
+## #17: Miniflare Queue Consumer Unreliable for Python Workers
+
+**Symptom**: Queue messages are never delivered when running locally with `wrangler dev`.
+
+Miniflare's local queue consumer does not work reliably with Python Workers. Queue messages may never be delivered locally.
+
+**Workaround**: Build a synchronous `POST /process-now` endpoint that runs the pipeline inline for local dev and testing:
+
+```python
+class Default(WorkerEntrypoint):
+    async def fetch(self, request):
+        if request.method == "POST" and parsed.path == "/process-now":
+            await self.run_pipeline()  # Same logic as queue handler
+            return Response("OK")
+```
+
+Verify actual queue behavior on real Cloudflare infrastructure, not locally.
+
+---
+
+## #18: Large Binary Data Must Not Round-Trip Through Python
+
+**Symptom**: Worker crashes or exceeds memory limits when serving large R2 objects (>10MB).
+
+The round-trip — JS ReadableStream to Python `bytes` to JS Response body — doubles memory in Wasm linear memory. For large objects this can crash the Worker.
+
+**Fix**: Bypass Python entirely for large binary serving. Pass the ReadableStream directly to a JS Response:
+
+```python
+# In entry.py fetch(), before delegating to FastAPI:
+from js import Response as JsResponse, Object
+from pyodide.ffi import to_js
+
+obj = await self.env.CONTENT.get(key)
+if obj:
+    headers = to_js({"Content-Type": content_type}, dict_converter=Object.fromEntries)
+    return JsResponse.new(obj.body, to_js({"headers": headers}, dict_converter=Object.fromEntries))
+```
+
+For small payloads (<2MB), reading into Python `bytes` is fine. For large binary, pass the ReadableStream directly to the JS Response constructor.

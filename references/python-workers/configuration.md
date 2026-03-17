@@ -17,6 +17,10 @@ Python-specific configuration only. For general wrangler.jsonc binding setup (D1
 
 ---
 
+## Wrangler Config Format
+
+**Use `wrangler.jsonc`** (JSON with comments) for all new projects. `wrangler.toml` is legacy — some newer Wrangler features are only available in JSON config files. `pywrangler init` and `npm create cloudflare` both generate `wrangler.jsonc` by default.
+
 ## Python-Specific wrangler.jsonc
 
 These are the fields that are **different or especially important** for Python Workers:
@@ -29,7 +33,8 @@ These are the fields that are **different or especially important** for Python W
   "name": "my-python-worker",
   "main": "src/main.py",          // Points to .py file, not .js/.ts
 
-  "compatibility_date": "2026-01-01",
+  // Always use today's date when creating a new Worker
+  "compatibility_date": "2026-03-17",
   "compatibility_flags": [
     "python_workers",              // REQUIRED — enables Python runtime
     "python_dedicated_snapshot"    // RECOMMENDED — faster cold starts
@@ -47,6 +52,17 @@ These are the fields that are **different or especially important** for Python W
     // No "binding" needed unless you also want programmatic access
     // Requests to files in this directory never invoke your Worker
   }
+
+  // Cron triggers
+  "triggers": {
+    "crons": ["*/5 * * * *"]  // Every 5 minutes
+  },
+
+  // Some Pyodide packages include JS files that need bundling
+  // Needed for packages like langchain_openai that bundle JS modules
+  "rules": [
+    { "type": "Data", "globs": ["python_modules/**/*.js"], "fallthrough": true }
+  ]
 
   // ... all other bindings (D1, KV, Queues, etc.) are configured
   // identically to JS Workers — see Cloudflare docs
@@ -130,6 +146,17 @@ uv run pywrangler types
 | `psycopg2` | D1 binding (it's SQLite) |
 | `cryptography` | `hashlib`, `hmac` (stdlib) |
 
+### Confirmed working on Workers
+
+- `Pillow` (PIL) — image generation/manipulation
+- `LangChain` (`langchain_core`, `langchain_openai`) — AI chains (needs `rules` config for JS bundling)
+- `Pygments` — syntax highlighting
+- `feedparser` — RSS/Atom parsing
+- `httpx` — async HTTP client
+- `Jinja2` — templating
+- `bleach` — HTML sanitization
+- `beautifulsoup4` — HTML parsing (without lxml backend)
+
 ### Adding packages
 
 ```bash
@@ -161,6 +188,18 @@ uv add --group test pytest         # Test deps (not deployed)
 ```bash
 uv run pywrangler dev        # Local dev server at http://localhost:8787
 ```
+
+### `.dev.vars` — Local Development Secrets
+
+Create a `.dev.vars` file in the project root for secrets during local development (NOT committed to git):
+
+```
+# .dev.vars — local development secrets
+API_KEY=sk-your-key-here
+SESSION_SECRET=local-dev-secret
+```
+
+These override `self.env` variables during local development. Add `.dev.vars` to `.gitignore`.
 
 **Important**: Vectorize has no local simulation — you must set `"remote": true` on Vectorize (and optionally AI) bindings during dev:
 
