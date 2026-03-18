@@ -7,7 +7,7 @@ Python Workers run on [Pyodide](https://pyodide.org/) (CPython compiled to WebAs
 ## Install
 
 ```bash
-claude skill install adewale/python-workers-skill
+npx skills add adewale/python-workers-skill
 ```
 
 ## What's Covered
@@ -23,7 +23,7 @@ claude skill install adewale/python-workers-skill
 ## Files
 
 ```
-skill/                                     # The installable skill
+skills/python-workers/                     # The installable skill
 ├── SKILL.md                               # Skill definition, decision trees, anti-patterns
 └── references/python-workers/
     ├── README.md                          # Runtime overview, quick start, project structure
@@ -49,7 +49,7 @@ tests/                                     # Evals
 | Check package compatibility | configuration.md (Packages) | gotchas.md (#13) |
 | Something isn't working | gotchas.md (Quick Reference table) | patterns.md |
 
-All files are in `skill/references/python-workers/`.
+All files are in `skills/python-workers/references/python-workers/`.
 
 ## Contributing
 

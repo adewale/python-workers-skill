@@ -1,5 +1,11 @@
 {
   "name": "python-workers",
   "description": "Skill for building Cloudflare Workers in Python (Pyodide runtime)",
-  "skills": ["skill"]
+  "plugins": [
+    {
+      "name": "python-workers",
+      "source": "./",
+      "skills": ["./skills/python-workers"]
+    }
+  ]
 }

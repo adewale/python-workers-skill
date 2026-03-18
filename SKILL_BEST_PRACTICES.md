@@ -4,25 +4,26 @@ Lessons learned from building the [python-workers](https://github.com/adewale/py
 
 ## Repo Structure
 
-Separate the installable skill from repo metadata. The `skill/` directory is what gets installed; everything else is for humans.
+Separate the installable skill from repo metadata. The `skills/<name>/` directory is what gets installed; everything else is for humans.
 
 ```
 my-skill-repo/
 ├── .claude-plugin/
-│   └── marketplace.json        # For marketplace distribution
+│   └── marketplace.json        # For marketplace/npx distribution
 ├── .gitignore
 ├── README.md                   # Repo README (not part of skill)
 ├── LICENSE
-├── skill/                      # The installable skill
-│   ├── SKILL.md                # Required: frontmatter + instructions
-│   ├── references/             # Docs loaded on demand
-│   └── scripts/                # Executable code
-└── tests/                      # Evals/benchmarks (not part of skill)
+├── skills/
+│   └── my-skill/               # Directory name MUST match frontmatter `name`
+│       ├── SKILL.md             # Required: frontmatter + instructions
+│       ├── references/          # Docs loaded on demand
+│       └── scripts/             # Executable code
+└── tests/                       # Evals/benchmarks (not part of skill)
 ```
 
-**Why**: When a user installs the skill, they get `skill/` — not your README, LICENSE, or test harness. Keeping them separate avoids polluting the installed skill with repo metadata.
+**Why**: When a user runs `npx skills add`, the CLI searches `skills/` (plural) as a priority directory. The [Agent Skills spec](https://agentskills.io/specification) requires the parent directory name to match the `name` field in SKILL.md frontmatter. Using `skill/` (singular) or a mismatched directory name breaks discovery and violates the spec.
 
-**Sources**: [blacktop/ipsw-skill](https://github.com/blacktop/ipsw-skill), [solana-foundation/solana-dev-skill](https://github.com/solana-foundation/solana-dev-skill), [anthropics/skills](https://github.com/anthropics/skills)
+**Sources**: [Agent Skills Specification](https://agentskills.io/specification), [vercel-labs/skills CLI source](https://github.com/vercel-labs/skills), [blacktop/ipsw-skill](https://github.com/blacktop/ipsw-skill), [solana-foundation/solana-dev-skill](https://github.com/solana-foundation/solana-dev-skill), [anthropics/skills](https://github.com/anthropics/skills)
 
 ## SKILL.md
 
@@ -152,19 +153,57 @@ A best practices doc that mirrors the skill's content makes it easier for non-te
 
 ## Distribution
 
-### Include marketplace.json for Claude Code
+### Directory name must match the `name` field
+
+The [Agent Skills spec](https://agentskills.io/specification) requires: the `name` field in SKILL.md frontmatter **must match the parent directory name**. If your SKILL.md has `name: my-skill`, it must live in a directory called `my-skill/`.
+
+```
+# WRONG — name doesn't match directory
+skill/SKILL.md          # name: my-skill but dir is "skill"
+
+# CORRECT
+skills/my-skill/SKILL.md   # name: my-skill, dir is "my-skill"
+```
+
+**Source**: [Agent Skills Specification](https://agentskills.io/specification), confirmed by reading [vercel-labs/skills CLI source](https://github.com/vercel-labs/skills)
+
+### Use `skills/` (plural) as the top-level directory
+
+The `npx skills add` CLI ([vercel-labs/skills](https://github.com/vercel-labs/skills)) searches these directories in priority order:
+
+1. Root `SKILL.md`
+2. `skills/<name>/SKILL.md` (plural — **first priority**)
+3. Paths declared in `.claude-plugin/marketplace.json`
+4. Recursive fallback (any `SKILL.md` up to depth 5)
+
+Using `skill/` (singular) is **not** in the priority list and will only be found via recursive fallback. Use `skills/` to ensure reliable discovery.
+
+**Source**: [vercel-labs/skills `discoverSkills()` source code](https://github.com/vercel-labs/skills)
+
+### Include marketplace.json with correct format
+
+The `.claude-plugin/marketplace.json` must use the `plugins` array format, and all skill paths must start with `./`:
 
 ```json
 {
   "name": "my-skill",
   "description": "What it does",
-  "skills": ["skill"]
+  "plugins": [
+    {
+      "name": "my-skill",
+      "source": "./",
+      "skills": ["./skills/my-skill"]
+    }
+  ]
 }
 ```
 
-Place in `.claude-plugin/marketplace.json` at the repo root.
+Common mistakes:
+- Using a flat `{"skills": ["skill"]}` format — the CLI expects a `plugins` array
+- Omitting `./` prefix — paths must start with `./` or they're silently rejected
+- Using `"skill"` instead of `"./skills/my-skill"` — must be the full relative path
 
-**Source**: [anthropics/skills](https://github.com/anthropics/skills), [blacktop/ipsw-skill](https://github.com/blacktop/ipsw-skill), [trailofbits/skills](https://github.com/trailofbits/skills)
+**Source**: [anthropics/skills](https://github.com/anthropics/skills), [vercel-labs/skills `plugin-manifest.ts` source](https://github.com/vercel-labs/skills)
 
 ### Add a .gitignore
 
