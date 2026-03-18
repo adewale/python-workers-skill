@@ -259,3 +259,15 @@ check:
 ### Key requirement
 
 Your source code must be importable outside the Workers runtime. This means FFI imports need the `HAS_PYODIDE` guard pattern — see patterns.md (Testing).
+
+---
+
+## See Also
+
+- [README.md](README.md) — Runtime overview, quick start, project structure
+- [api.md](api.md) — Handler signatures, FFI functions, bindings, Workflows
+- [patterns.md](patterns.md) — FFI boundary, D1 conversion, Static Assets, DOs, testing
+- [gotchas.md](gotchas.md) — 18 Python-specific issues with error signatures and fixes
+- [Cloudflare Python Workers Docs](https://developers.cloudflare.com/workers/languages/python/)
+- [Python Workers Examples](https://github.com/cloudflare/python-workers-examples)
+- [Pyodide Package List](https://pyodide.org/en/stable/usage/packages-in-pyodide.html)

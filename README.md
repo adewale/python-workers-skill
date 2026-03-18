@@ -36,6 +36,21 @@ tests/                                     # Evals
 └── evals.json
 ```
 
+## Reading Order
+
+| Task | Start With | Then Read |
+|------|-----------|-----------|
+| First Python Worker | README.md | configuration.md → api.md |
+| Add FastAPI | api.md (ASGI Bridge) | patterns.md (request.js_object) |
+| Debug JsProxy error | gotchas.md (#6, #9) | patterns.md (FFI Boundary) |
+| Set up testing | patterns.md (Testing) | configuration.md (Test Setup) |
+| Add Static Assets | patterns.md (Static Assets) | configuration.md (wrangler.jsonc) |
+| Use Durable Objects | patterns.md (Durable Objects) | api.md (Handlers) |
+| Check package compatibility | configuration.md (Packages) | gotchas.md (#13) |
+| Something isn't working | gotchas.md (Quick Reference table) | patterns.md |
+
+All files are in `skill/references/python-workers/`.
+
 ## Contributing
 
 [BEST_PRACTICES.md](BEST_PRACTICES.md) mirrors the skill's contents in a readable format. If you spot something wrong, outdated, or missing, [open an issue](https://github.com/adewale/python-workers-skill/issues) or submit a PR.

@@ -415,3 +415,15 @@ class Default(WorkerEntrypoint):
 ```
 
 **Caveat**: This reads files bundled at deploy time. You cannot write files or read files created at runtime. For templates, see patterns.md (Jinja2 SSR).
+
+---
+
+## See Also
+
+- [README.md](README.md) — Runtime overview, quick start, project structure
+- [configuration.md](configuration.md) — wrangler.jsonc, packages, flags, test setup
+- [patterns.md](patterns.md) — FFI boundary, D1 conversion, Static Assets, DOs, testing
+- [gotchas.md](gotchas.md) — 18 Python-specific issues with error signatures and fixes
+- [Cloudflare Python Workers Docs](https://developers.cloudflare.com/workers/languages/python/)
+- [Python Workers Examples](https://github.com/cloudflare/python-workers-examples)
+- [Pyodide Package List](https://pyodide.org/en/stable/usage/packages-in-pyodide.html)

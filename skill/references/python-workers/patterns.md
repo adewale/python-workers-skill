@@ -898,3 +898,15 @@ uv run pytest tests/unit -x -q              # Fast unit tests
 uv run pytest tests/integration -x -q        # Integration tests
 uv run pytest tests/ --cov=src               # With coverage
 ```
+
+---
+
+## See Also
+
+- [README.md](README.md) — Runtime overview, quick start, project structure
+- [api.md](api.md) — Handler signatures, FFI functions, bindings, Workflows
+- [configuration.md](configuration.md) — wrangler.jsonc, packages, flags, test setup
+- [gotchas.md](gotchas.md) — 18 Python-specific issues with error signatures and fixes
+- [Cloudflare Python Workers Docs](https://developers.cloudflare.com/workers/languages/python/)
+- [Python Workers Examples](https://github.com/cloudflare/python-workers-examples)
+- [Pyodide Package List](https://pyodide.org/en/stable/usage/packages-in-pyodide.html)
