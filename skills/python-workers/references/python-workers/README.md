@@ -15,7 +15,7 @@ Cloudflare Python Workers run Python 3.12+ via **Pyodide** (CPython compiled to 
 | Binding results | Native JS objects | JsProxy (must convert with `.to_py()`) |
 | Dict→JS object | Automatic | Requires `to_js(dict, dict_converter=Object.fromEntries)` |
 | `None` | N/A | Maps to JS `undefined`, NOT `null` |
-| HTTP clients | `fetch()`, any npm package | Only async: `httpx`, `aiohttp` (no `requests`) |
+| HTTP clients | `fetch()`, any npm package | `workers.fetch()`, `httpx`/`aiohttp`; some sync clients work but block the handler |
 | Packages | npm (anything) | Pure Python + Pyodide-compiled only |
 | PRNG at init | Works | Fails (breaks Wasm snapshot) |
 | Templates | File I/O | No writable FS; bundle at deploy time |
@@ -72,7 +72,7 @@ project-root/
 ├── assets/                  # Static files (served without waking Worker)
 ├── migrations/              # D1 SQL files
 ├── wrangler.jsonc           # Workers config (main = "src/main.py")
-├── pyproject.toml           # Python deps (only async HTTP, Pyodide-compat)
+├── pyproject.toml           # Python deps (Pyodide-compatible)
 └── Makefile                 # test, lint, deploy commands
 ```
 
@@ -105,7 +105,7 @@ project-root/
 - [api.md](api.md) — Handler signatures, FFI functions, bindings, Workflows
 - [configuration.md](configuration.md) — wrangler.jsonc, packages, flags, test setup
 - [patterns.md](patterns.md) — FFI boundary, D1 conversion, Static Assets, DOs, testing
-- [gotchas.md](gotchas.md) — 18 Python-specific issues with error signatures and fixes
+- [gotchas.md](gotchas.md) — 17 Python-specific issues with error signatures and fixes
 - [Cloudflare Python Workers Docs](https://developers.cloudflare.com/workers/languages/python/)
 - [Python Workers Examples](https://github.com/cloudflare/python-workers-examples)
 - [Pyodide Package List](https://pyodide.org/en/stable/usage/packages-in-pyodide.html)

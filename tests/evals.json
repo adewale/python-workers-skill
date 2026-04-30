@@ -18,6 +18,12 @@
       "prompt": "I have a Python Worker with D1 and Queues. How do I set up pytest to test it? The Worker code imports `from pyodide.ffi import to_js` and `import js` so it crashes when I try to import it in regular Python.",
       "expected_output": "HAS_PYODIDE guard pattern, MockD1/MockQueue implementations, pyproject.toml pytest config, Pyodide fakes for testing FFI branches, three-tier testing strategy",
       "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "I'm porting an existing Python service to Cloudflare Workers. Can I keep using synchronous HTTP clients like `requests`, `urllib3`, or `httpx.Client`, or do Python Workers require async-only HTTP? Show the recommended guidance and tradeoffs.",
+      "expected_output": "Explains that a subset of sync HTTP clients is demonstrated to work in Python Workers (`requests`, `urllib3.PoolManager`, `httpx.Client`), avoids claiming async-only HTTP, recommends `workers.fetch()` or async clients such as `httpx.AsyncClient` for concurrent fan-out/latency-sensitive code, notes sync clients block the handler and that raw stdlib/socket HTTP paths are not generally demonstrated",
+      "files": []
     }
   ]
 }

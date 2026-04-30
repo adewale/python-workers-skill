@@ -9,23 +9,22 @@ Issues that are **specific to Python Workers**. General Cloudflare Workers issue
 | # | Issue | Error Signature | Fix |
 |---|-------|-----------------|-----|
 | 1 | Old handler pattern | `on_fetch is not defined` | Use `WorkerEntrypoint` class |
-| 2 | Sync HTTP library | `blocking call in async context` | Use `httpx` or `aiohttp` |
-| 3 | to_py is a method | `cannot import name 'to_py'` | Call `.to_py()` on the JsProxy |
-| 4 | None = undefined ≠ null | D1 NULL/undefined issues | Import `jsnull` from `pyodide.ffi` |
-| 5 | js.eval() blocked | `Code generation disallowed` | Use a non-eval alternative (e.g. `js.JSON.parse()`) |
-| 6 | Dict → Map | API rejects Python dict | Use `dict_converter=Object.fromEntries` |
-| 7 | Slow cold start | First request 1-10s | Add `python_dedicated_snapshot` flag |
-| 8 | PRNG at init | Deploy fails | Move `random`/`secrets` into handlers |
-| 9 | D1 results are JsProxy | TypeError on iteration | Call `.to_py()` on `results.results` |
-| 10 | Queue body is JsProxy | TypeError on field access | Call `msg.body.to_py()` |
-| 11 | CPU exceeded | Worker killed | Increase `cpu_ms` (Python burns more CPU) |
-| 12 | Stdlib limitations | ImportError | Check list below |
-| 13 | Native packages fail | ModuleNotFoundError | Use Pyodide-compatible alternatives |
-| 14 | Mocks pass, prod fails | JsProxy bugs in production | Add E2E tests against real infra |
-| 15 | bytes crosses as PyProxy | R2/KV rejects Python bytes | Use `to_js(data)` for Uint8Array |
-| 16 | Cold start cancels queue | First queue msg canceled, retried | Inherent behavior — don't chase it |
-| 17 | Miniflare queue unreliable | Queue msgs never delivered locally | Use `POST /process-now` for local dev |
-| 18 | Large binary round-trip | Worker crash on >10MB R2 objects | Bypass Python — pass ReadableStream to JS Response |
+| 2 | to_py is a method | `cannot import name 'to_py'` | Call `.to_py()` on the JsProxy |
+| 3 | None = undefined ≠ null | D1 NULL/undefined issues | Import `jsnull` from `pyodide.ffi` |
+| 4 | js.eval() blocked | `Code generation disallowed` | Use a non-eval alternative (e.g. `js.JSON.parse()`) |
+| 5 | Dict → Map | API rejects Python dict | Use `dict_converter=Object.fromEntries` |
+| 6 | Slow cold start | First request 1-10s | Add `python_dedicated_snapshot` flag |
+| 7 | PRNG at init | Deploy fails | Move `random`/`secrets` into handlers |
+| 8 | D1 results are JsProxy | TypeError on iteration | Call `.to_py()` on `results.results` |
+| 9 | Queue body is JsProxy | TypeError on field access | Call `msg.body.to_py()` |
+| 10 | CPU exceeded | Worker killed | Increase `cpu_ms` (Python burns more CPU) |
+| 11 | Stdlib limitations | ImportError | Check list below |
+| 12 | Native packages fail | ModuleNotFoundError | Use Pyodide-compatible alternatives |
+| 13 | Mocks pass, prod fails | JsProxy bugs in production | Add E2E tests against real infra |
+| 14 | bytes crosses as PyProxy | R2/KV rejects Python bytes | Use `to_js(data)` for Uint8Array |
+| 15 | Cold start cancels queue | First queue msg canceled, retried | Inherent behavior — don't chase it |
+| 16 | Miniflare queue unreliable | Queue msgs never delivered locally | Use `POST /process-now` for local dev |
+| 17 | Large binary round-trip | Worker crash on >10MB R2 objects | Bypass Python — pass ReadableStream to JS Response |
 
 ---
 
@@ -53,26 +52,7 @@ Also applies to `on_scheduled` → `async def scheduled(self, controller)`.
 
 ---
 
-## #2: Sync HTTP Libraries Don't Work
-
-**Error**: `RuntimeError: cannot use blocking call in async context`
-
-Pyodide blocks raw sockets (browser security model). Only async HTTP works.
-
-```python
-# FAILS: requests, urllib3, httplib
-import requests
-response = requests.get(url)
-
-# WORKS: httpx (async), aiohttp, or js.fetch
-import httpx
-async with httpx.AsyncClient() as client:
-    response = await client.get(url)
-```
-
----
-
-## #3: to_py Is a Method, Not a Function
+## #2: to_py Is a Method, Not a Function
 
 **Error**: `ImportError: cannot import name 'to_py' from 'pyodide.ffi'`
 
@@ -89,7 +69,7 @@ Note: `to_js` IS a standalone function. Only `to_py` is asymmetric.
 
 ---
 
-## #4: None = undefined ≠ null
+## #3: None = undefined ≠ null
 
 The two distinct JS values `null` and `undefined` correspond to the two distinct Python values `jsnull` and `None`. Python `None` → JS `undefined` (NOT `null`):
 
@@ -109,7 +89,7 @@ from pyodide.ffi import jsnull
 await env.DB.prepare("UPDATE feeds SET etag = ?").bind(jsnull).run()
 ```
 
-**`is None` is never enough at the FFI boundary.** JS `null` and `undefined` both arrive as distinct JsProxy types — neither is Python `None`:
+**`is None` is not enough to detect every missing value at the FFI boundary.** JS `undefined` arrives as Python `None`, but JS `null` arrives as `jsnull`:
 
 | Value | `is None` | `bool()` | Notes |
 |-------|:---------:|:--------:|-------|
@@ -128,7 +108,7 @@ def _is_missing(value):
 
 ---
 
-## #5: js.eval() Is Disallowed
+## #4: js.eval() Is Disallowed
 
 **Error**: `EvalError: Code generation from strings disallowed for this context`
 
@@ -144,7 +124,7 @@ result = await self.env.READABILITY_SERVICE.extract(url, html)
 
 ---
 
-## #6: Dict Becomes Map Without dict_converter
+## #5: Dict Becomes Map Without dict_converter
 
 **Symptom**: Cloudflare API silently rejects your dict, or returns unexpected results.
 
@@ -170,7 +150,7 @@ def _to_js_value(value):
 
 ---
 
-## #7: Cold Start Performance
+## #6: Cold Start Performance
 
 **Symptom**: First request takes 1-10+ seconds.
 
@@ -187,11 +167,11 @@ Python Workers run Pyodide (CPython → WebAssembly). Inherently slower cold sta
 2. Workers Static Assets without binding (CSS/JS never wake Worker)
 3. Pre-compile Jinja2 templates at build time
 4. `stale-while-revalidate` cache headers + cron pre-warming
-5. Module-level constants are captured in snapshot (but no PRNG — see #8)
+5. Module-level constants are captured in snapshot (but no PRNG — see #7)
 
 ---
 
-## #8: PRNG Cannot Be Seeded During Initialization
+## #7: PRNG Cannot Be Seeded During Initialization
 
 **Error**: Deployment fails with user error.
 
@@ -214,7 +194,7 @@ Applies to: `random.*`, `secrets.*`, `uuid.uuid4()`, `os.urandom()`.
 
 ---
 
-## #9: D1 Results Are JsProxy
+## #8: D1 Results Are JsProxy
 
 **Symptom**: TypeError when iterating, JSON serializing, or accessing fields on D1 results.
 
@@ -232,7 +212,7 @@ for row in rows:
 
 ---
 
-## #10: Queue Message Body Is JsProxy
+## #9: Queue Message Body Is JsProxy
 
 **Symptom**: TypeError when accessing queue message fields.
 
@@ -247,7 +227,7 @@ feed_id = body["feed_id"]
 
 ---
 
-## #11: CPU Time Exceeded
+## #10: CPU Time Exceeded
 
 **Symptom**: Worker killed mid-execution.
 
@@ -259,7 +239,7 @@ Python Workers consume more CPU than JS Workers. Pyodide interpretation overhead
 
 ---
 
-## #12: Standard Library Limitations
+## #11: Standard Library Limitations
 
 **Not functional** (imports but doesn't work):
 - `multiprocessing` — no process spawning in Wasm
@@ -277,7 +257,7 @@ Python Workers consume more CPU than JS Workers. Pyodide interpretation overhead
 
 ---
 
-## #13: Native/Compiled Packages Don't Work
+## #12: Native/Compiled Packages Don't Work
 
 **Error**: `ModuleNotFoundError` or build errors.
 
@@ -291,7 +271,6 @@ Check: https://pyodide.org/en/stable/usage/packages-in-pyodide.html
 | `lxml` | `xml.etree.ElementTree` |
 | `psycopg2` | D1 (SQLite) |
 | `cryptography` | `hashlib`/`hmac` from stdlib |
-| `requests` | `httpx` (async) |
 
 **lxml deserves special attention.** It is a C extension built on libxml2/libxslt, unavailable in Pyodide. This eliminates most Python HTML processing libraries that depend on it: Trafilatura, Newspaper4k, Goose3, ReadabiliPy, readability-lxml, jusText, and Inscriptis. Always check the **full dependency tree** for C extensions before choosing any library — a transitive dependency on lxml is enough to break your Worker.
 
@@ -299,7 +278,7 @@ Request new packages: https://github.com/cloudflare/workerd/discussions/categori
 
 ---
 
-## #14: Mocks Pass, Production Fails
+## #13: Mocks Pass, Production Fails
 
 **Symptom**: All tests green, but production has TypeError/AttributeError from JsProxy.
 
@@ -324,7 +303,7 @@ E2E tests catch:
 
 ---
 
-## #15: Python `bytes` Cannot Cross FFI to R2/KV
+## #14: Python `bytes` Cannot Cross FFI to R2/KV
 
 **Symptom**: R2 `.put()`, KV `.put()`, or other binary APIs silently fail or reject the value.
 
@@ -343,7 +322,7 @@ This applies to any API expecting binary: R2, KV (binary values), WebSocket `.se
 
 ---
 
-## #16: Pyodide Cold Start Cancels First Queue Invocation
+## #15: Pyodide Cold Start Cancels First Queue Invocation
 
 **Symptom**: Queue messages take 30-60s longer than expected. `process-now` endpoint works instantly. No logs, no exceptions.
 
@@ -353,7 +332,7 @@ This is **not a bug** — it is inherent platform behavior due to Pyodide's cold
 
 ---
 
-## #17: Miniflare Queue Consumer Unreliable for Python Workers
+## #16: Miniflare Queue Consumer Unreliable for Python Workers
 
 **Symptom**: Queue messages are never delivered when running locally with `wrangler dev`.
 
@@ -373,7 +352,7 @@ Verify actual queue behavior on real Cloudflare infrastructure, not locally.
 
 ---
 
-## #18: Large Binary Data Must Not Round-Trip Through Python
+## #17: Large Binary Data Must Not Round-Trip Through Python
 
 **Symptom**: Worker crashes or exceeds memory limits when serving large R2 objects (>10MB).
 

@@ -2,7 +2,7 @@
 
 A [Claude Code skill](https://docs.anthropic.com/en/docs/claude-code) for building [Cloudflare Workers in Python](https://developers.cloudflare.com/workers/languages/python/).
 
-Python Workers run on [Pyodide](https://pyodide.org/) (CPython compiled to WebAssembly) inside V8 isolates. This creates a unique set of challenges — the JS/Python FFI boundary, JsProxy conversion, async-only HTTP, cold start management, and package compatibility — that this skill addresses.
+Python Workers run on [Pyodide](https://pyodide.org/) (CPython compiled to WebAssembly) inside V8 isolates. This creates a unique set of challenges — the JS/Python FFI boundary, JsProxy conversion, HTTP client compatibility, cold start management, and package compatibility — that this skill addresses.
 
 ## Install
 
@@ -17,7 +17,7 @@ npx skills add adewale/python-workers-skill
 - **Static Assets** — routing, `run_worker_first`, why this matters more for Python (cold starts)
 - **Testing** — `HAS_PYODIDE` guard, mock bindings, Pyodide fakes, three-tier strategy
 - **Configuration** — `wrangler.jsonc`, compatibility flags, packages, `.dev.vars`, CPU limits
-- **18 gotchas** — with error signatures and fixes
+- **17 gotchas** — with error signatures and fixes
 - **Anti-patterns** — raw JsProxy in business logic, dict without `dict_converter`, module-level PRNG, and more
 
 ## Files
@@ -29,7 +29,7 @@ skills/python-workers/                     # The installable skill
     ├── README.md                          # Runtime overview, quick start, project structure
     ├── api.md                             # Handlers, Response, FFI, bindings, Workflows
     ├── configuration.md                   # wrangler.jsonc, packages, flags, testing setup
-    ├── gotchas.md                         # 18 Python-specific issues
+    ├── gotchas.md                         # 17 Python-specific issues
     └── patterns.md                        # FFI boundary, D1 conversion, Static Assets, DOs, testing
 BEST_PRACTICES.md                          # Human-readable mirror (for review/feedback)
 tests/                                     # Evals
@@ -42,11 +42,11 @@ tests/                                     # Evals
 |------|-----------|-----------|
 | First Python Worker | README.md | configuration.md → api.md |
 | Add FastAPI | api.md (ASGI Bridge) | patterns.md (request.js_object) |
-| Debug JsProxy error | gotchas.md (#6, #9) | patterns.md (FFI Boundary) |
+| Debug JsProxy error | gotchas.md (#5, #8) | patterns.md (FFI Boundary) |
 | Set up testing | patterns.md (Testing) | configuration.md (Test Setup) |
 | Add Static Assets | patterns.md (Static Assets) | configuration.md (wrangler.jsonc) |
 | Use Durable Objects | patterns.md (Durable Objects) | api.md (Handlers) |
-| Check package compatibility | configuration.md (Packages) | gotchas.md (#13) |
+| Check package compatibility | configuration.md (Packages) | gotchas.md (#12) |
 | Something isn't working | gotchas.md (Quick Reference table) | patterns.md |
 
 All files are in `skills/python-workers/references/python-workers/`.

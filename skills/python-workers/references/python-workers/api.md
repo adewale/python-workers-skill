@@ -371,7 +371,7 @@ Requires compatibility flags: `"python_workers"`, `"python_workflows"`, `"experi
 
 ### `workers.fetch()` — Outbound HTTP
 
-`workers.fetch()` wraps the JS `fetch()` API directly. It is always available without package installation — distinct from `httpx`:
+`workers.fetch()` wraps the JS `fetch()` API directly. It is always available without package installation:
 
 ```python
 from workers import fetch
@@ -380,6 +380,23 @@ from workers import fetch
 response = await fetch("https://example.com/api")
 data = await response.json()  # JsProxy — call .to_py()
 ```
+
+For higher-level Python clients, both async and a subset of sync clients work in the current runtime. The Cloudflare examples include working synchronous calls with `requests`, `urllib3`, and `httpx.Client`.
+
+```python
+# Async: best for fan-out / overlapping multiple requests
+import httpx
+async with httpx.AsyncClient() as client:
+    response = await client.get("https://example.com/api")
+
+# Sync: works for simple one-off calls, but blocks this handler while in flight
+import requests
+response = requests.get("https://example.com/api", timeout=10)
+```
+
+Use `workers.fetch()` or async clients when you need concurrency, streaming-style integration with Workers APIs, or the lowest dependency overhead. Sync clients are convenient for porting existing code, but they execute sequentially and hold the Python handler until the response completes.
+
+Known demonstrated sync clients: `requests`, `urllib3.PoolManager`, and `httpx.Client`. Do not assume every raw-socket or stdlib HTTP path works; `urllib.request`, `http.client`, and arbitrary `socket` usage are not covered by the examples.
 
 ---
 
@@ -425,7 +442,7 @@ class Default(WorkerEntrypoint):
 - [README.md](README.md) — Runtime overview, quick start, project structure
 - [configuration.md](configuration.md) — wrangler.jsonc, packages, flags, test setup
 - [patterns.md](patterns.md) — FFI boundary, D1 conversion, Static Assets, DOs, testing
-- [gotchas.md](gotchas.md) — 18 Python-specific issues with error signatures and fixes
+- [gotchas.md](gotchas.md) — 17 Python-specific issues with error signatures and fixes
 - [Cloudflare Python Workers Docs](https://developers.cloudflare.com/workers/languages/python/)
 - [Python Workers Examples](https://github.com/cloudflare/python-workers-examples)
 - [Pyodide Package List](https://pyodide.org/en/stable/usage/packages-in-pyodide.html)
