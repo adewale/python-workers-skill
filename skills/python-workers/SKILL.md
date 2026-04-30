@@ -84,19 +84,18 @@ Testing task?
 
 ```
 Common issues?
-├─ D1 returns JsProxy not dict           -> gotchas.md (#9) + patterns.md (FFI)
-├─ Dict rejected by Cloudflare API       -> gotchas.md (#6) — dict_converter
-├─ None vs null in D1                    -> gotchas.md (#4)
-├─ Sync HTTP library fails               -> gotchas.md (#2)
-├─ Cold start too slow                   -> gotchas.md (#7) + patterns.md (Per-Isolate Init)
-├─ PRNG fails at module level            -> gotchas.md (#8)
-├─ Package not found / won't install     -> gotchas.md (#13, #14)
+├─ D1 returns JsProxy not dict           -> gotchas.md (#8) + patterns.md (FFI)
+├─ Dict rejected by Cloudflare API       -> gotchas.md (#5) — dict_converter
+├─ None vs null in D1                    -> gotchas.md (#3)
+├─ Cold start too slow                   -> gotchas.md (#6) + patterns.md (Per-Isolate Init)
+├─ PRNG fails at module level            -> gotchas.md (#7)
+├─ Package not found / won't install     -> gotchas.md (#12, #13)
 ├─ "python_workers flag required"        -> configuration.md
-├─ js.eval() disallowed                  -> gotchas.md (#5)
-├─ R2/KV rejects Python bytes           -> gotchas.md (#15) — to_js(bytes)
-├─ Queue msg canceled on cold start      -> gotchas.md (#16) — inherent behavior
-├─ Queue msgs not delivered locally      -> gotchas.md (#17) — use /process-now
-├─ Worker crashes on large R2 objects    -> gotchas.md (#18) — bypass Python
+├─ js.eval() disallowed                  -> gotchas.md (#4)
+├─ R2/KV rejects Python bytes           -> gotchas.md (#14) — to_js(bytes)
+├─ Queue msg canceled on cold start      -> gotchas.md (#15) — inherent behavior
+├─ Queue msgs not delivered locally      -> gotchas.md (#16) — use /process-now
+├─ Worker crashes on large R2 objects    -> gotchas.md (#17) — bypass Python
 ├─ Tests pass but prod fails             -> patterns.md (Testing — E2E)
 └─ No filesystem access for templates    -> patterns.md (Jinja2 SSR)
 ```
@@ -111,7 +110,7 @@ All in `references/python-workers/`:
 | `api.md` | Python-specific handler signatures, FFI functions (to_js/to_py/create_proxy), binding access patterns, Response (including binary), Service Bindings (RPC + dict→Map note), Workflows, `workers.fetch()` |
 | `configuration.md` | Python-specific config (compatibility flags, pyproject.toml, packages + confirmed working list, CPU limits, `.dev.vars`, `rules` for JS bundling, `triggers.crons`, test setup) |
 | `patterns.md` | FFI boundary layer, D1 row conversion, queue message handling, Static Assets architecture, Durable Objects (storage, alarms, WebSocket hibernation, outbound WS), per-isolate initialization, `request.js_object` unwrapping, testing (3-tier with mocks), Jinja2 without filesystem, FastAPI ASGI bridge |
-| `gotchas.md` | 18 Python-specific issues with error signatures and fixes |
+| `gotchas.md` | 17 Python-specific issues with error signatures and fixes |
 
 ## Anti-Patterns
 
@@ -173,17 +172,4 @@ await env.BUCKET.put("key", my_bytes)
 
 # ALWAYS — convert to Uint8Array
 await env.BUCKET.put("key", to_js(my_bytes))
-```
-
-### Sync HTTP Libraries
-
-```python
-# NEVER — raw sockets blocked in Pyodide
-import requests
-response = requests.get(url)
-
-# ALWAYS — async only
-import httpx
-async with httpx.AsyncClient() as client:
-    response = await client.get(url)
 ```

@@ -423,7 +423,7 @@ class Default(WorkerEntrypoint):
 - [README.md](README.md) — Runtime overview, quick start, project structure
 - [configuration.md](configuration.md) — wrangler.jsonc, packages, flags, test setup
 - [patterns.md](patterns.md) — FFI boundary, D1 conversion, Static Assets, DOs, testing
-- [gotchas.md](gotchas.md) — 18 Python-specific issues with error signatures and fixes
+- [gotchas.md](gotchas.md) — 17 Python-specific issues with error signatures and fixes
 - [Cloudflare Python Workers Docs](https://developers.cloudflare.com/workers/languages/python/)
 - [Python Workers Examples](https://github.com/cloudflare/python-workers-examples)
 - [Pyodide Package List](https://pyodide.org/en/stable/usage/packages-in-pyodide.html)

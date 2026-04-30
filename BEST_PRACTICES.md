@@ -126,7 +126,7 @@ project-root/
 ├── assets/                  # Static files (served without waking Worker)
 ├── migrations/              # D1 SQL files
 ├── wrangler.jsonc           # Workers config (main = "src/main.py")
-├── pyproject.toml           # Python deps (only async HTTP, Pyodide-compat)
+├── pyproject.toml           # Python deps (Pyodide-compatible)
 └── Makefile                 # test, lint, deploy commands
 ```
 
@@ -1268,7 +1268,7 @@ requires-python = ">=3.12"
 dependencies = [
     # Only packages deployed to Workers go here
     "feedparser>=6.0.0",
-    "httpx>=0.27.0",         # Async HTTP — requests/urllib3 won't work
+    "httpx>=0.27.0",         # Async HTTP client
     "jinja2>=3.1.0",
     "bleach>=6.0.0",
 ]
@@ -1303,7 +1303,6 @@ uv run pywrangler types
 
 **What does not work:**
 
-- **Sync HTTP libraries**: `requests`, `urllib3` — blocked by Pyodide's socket restrictions
 - **Native C extensions** not in Pyodide: `psycopg2`, `lxml`, `cryptography`
 - **OS-specific modules**: `multiprocessing`, `threading`, `socket` (raw)
 
@@ -1311,8 +1310,6 @@ uv run pywrangler types
 
 | Does Not Work | Use Instead |
 |---------------|-------------|
-| `requests` | `httpx` (async) or `aiohttp` |
-| `urllib3` | `httpx` (async) |
 | `lxml` | `xml.etree.ElementTree` (stdlib) |
 | `psycopg2` | D1 binding (it's SQLite) |
 | `cryptography` | `hashlib`, `hmac` (stdlib) |
@@ -1385,73 +1382,69 @@ from src.models import FeedRow  # WRONG — will fail
 
 ## Common Pitfalls
 
-These are the 18 known Python-specific gotchas, presented as a narrative. Each one has caught real developers in real projects.
+These are the 17 known Python-specific gotchas, presented as a narrative. Each one has caught real developers in real projects.
 
 ### 1. Using the legacy handler pattern
 
 If you see `TypeError: on_fetch is not defined`, you are using the deprecated `@handler` + `on_fetch` pattern from before August 2025. Switch to the class-based `WorkerEntrypoint` pattern. The same applies to `on_scheduled` — use `async def scheduled(self, controller)` on the class instead.
 
-### 2. Using synchronous HTTP libraries
-
-`requests`, `urllib3`, and `httplib` will fail with `RuntimeError: cannot use blocking call in async context`. Pyodide blocks raw sockets (it runs in what is essentially a browser sandbox). You must use async HTTP libraries: `httpx` (recommended), `aiohttp`, or the built-in `workers.fetch()` / `js.fetch`.
-
-### 3. Trying to import `to_py` as a function
+### 2. Trying to import `to_py` as a function
 
 `to_py` is a method on JsProxy objects, not a standalone function. `from pyodide.ffi import to_py` will fail with `ImportError`. Call `.to_py()` on the object instead. Note the asymmetry: `to_js` IS a standalone function.
 
-### 4. Assuming `None` equals `null`
+### 3. Assuming `None` equals `null`
 
 Python `None` maps to JavaScript `undefined`, not `null`. JavaScript `null` arrives in Python as a `JsNull` object, not `None`. JavaScript `undefined` arrives as `None`. This causes real bugs with D1, which needs `null` for SQL NULL. Use `from pyodide.ffi import jsnull` to create a proper JavaScript null. And any code that checks `if x is None` at the FFI boundary must also check for `jsnull`. See the [None/null/undefined section](#the-none--null--undefined-problem) for the full details and helper functions.
 
-### 5. Using `js.eval()`
+### 4. Using `js.eval()`
 
 Workers block `eval()` for security. You will see `EvalError: Code generation from strings disallowed for this context`. Use `js.JSON.parse()` instead. Also watch out for third-party libraries that call `js.eval()` under the hood — for example, `python-readability` loads Mozilla Readability via `js.eval()` and will fail. The workaround for JS-native functionality is a Service Binding to a separate JavaScript Worker.
 
-### 6. Passing dicts to JavaScript without `dict_converter`
+### 5. Passing dicts to JavaScript without `dict_converter`
 
 `to_js()` on a Python dict creates a JavaScript `Map`, not a plain `Object`. Most Cloudflare APIs only accept `Object` and will silently reject or mishandle `Map`. Always use `to_js(my_dict, dict_converter=Object.fromEntries)`. Write a helper function so you do not have to remember this every time.
 
-### 7. Slow cold starts
+### 6. Slow cold starts
 
 First request taking 1-10+ seconds is expected behavior for Python Workers running Pyodide. The single biggest improvement is adding the `python_dedicated_snapshot` compatibility flag (drops ~10s to ~1s). Beyond that: use Workers Static Assets without a binding (so CSS/JS never wake the Worker), pre-compile Jinja2 templates, use `stale-while-revalidate` cache headers, and consider cron-based cache pre-warming.
 
-### 8. Calling PRNG functions at module level
+### 7. Calling PRNG functions at module level
 
 Any call to `random.seed()`, `secrets.token_hex()`, `uuid.uuid4()`, or `os.urandom()` at module level will cause deployment to fail. WebAssembly memory snapshots assert that PRNG state is unchanged after snapshotting. Move all entropy-generating calls inside handler methods.
 
-### 9. Treating D1 results as Python dicts
+### 8. Treating D1 results as Python dicts
 
 D1 query results are JsProxy objects. If you iterate over `results.results` directly, individual rows may behave like dicts in some ways but fail in others. Always convert at the boundary: `[dict(r) for r in results.results.to_py()]`.
 
-### 10. Accessing queue message bodies without conversion
+### 9. Accessing queue message bodies without conversion
 
 `msg.body` is a JsProxy. `msg.body["feed_id"]` may fail with TypeError. Always call `msg.body.to_py()` first and work with the resulting Python dict.
 
-### 11. Running out of CPU time
+### 10. Running out of CPU time
 
 Python Workers consume significantly more CPU than JavaScript Workers for the same work. If your Worker is being killed mid-execution, increase `cpu_ms` in your `wrangler.jsonc`. The default 30ms is almost never enough for Python Workers doing real work. 60 seconds is a common starting point.
 
-### 12. Hitting standard library limitations
+### 11. Hitting standard library limitations
 
 Some stdlib modules import but do not work: `multiprocessing` (no process spawning in Wasm), `threading` (no threads in Wasm), `socket` (raw sockets blocked). Some cannot import at all: `pty`, `tty` (depend on removed `termios`). Some are limited: `decimal` (C implementation only). Many OS-specific modules are excluded entirely: `curses`, `dbm`, `ensurepip`, `fcntl`, `grp`, `idlelib`, `lib2to3`, `msvcrt`, `pwd`, `resource`, `syslog`, `termios`, `tkinter`, `venv`, `winreg`, `winsound`.
 
-### 13. Using native/compiled packages
+### 12. Using native/compiled packages
 
 Only pure Python packages and packages pre-compiled for Pyodide work. Native C extensions cannot be compiled to WebAssembly automatically. Check https://pyodide.org/en/stable/usage/packages-in-pyodide.html before choosing any library. Pay special attention to transitive dependencies — a library that is itself pure Python may depend on `lxml` or `cryptography` deep in its dependency tree, which will break your Worker.
 
-### 14. Tests passing but production failing
+### 13. Tests passing but production failing
 
 This is the most insidious gotcha. Your mocks return Python dicts, but production returns JsProxy objects. Your test suite is green, and your production Worker crashes with `TypeError` or `AttributeError`. The fix is E2E tests against real Cloudflare infrastructure. Deploy to a test instance and run your test suite against it. E2E tests catch JsProxy conversion bugs, real D1 NULL behavior, Vectorize scoring, AI embedding dimensions, and queue serialization round-trips.
 
-### 15. Passing Python `bytes` to binary APIs
+### 14. Passing Python `bytes` to binary APIs
 
 Python `bytes` crosses the FFI as a `PyProxy`, not a `Uint8Array`. R2's `.put()`, KV's `.put()`, and WebSocket's `.send()` with binary frames will reject it. Use `to_js(my_bytes)` to convert to a proper `Uint8Array`.
 
-### 16. Cold start canceling the first queue message
+### 15. Cold start canceling the first queue message
 
 When a queue message hits a cold Python Worker isolate, the Workers runtime cancels the first invocation — zero logs, zero exceptions. The automatic retry succeeds because the isolate is now warm. Queue messages may appear to take 30-60s longer than expected. This is inherent platform behavior due to Pyodide's cold start exceeding the queue consumer timeout. Do not chase it.
 
-### 17. Miniflare queue consumer not working locally
+### 16. Miniflare queue consumer not working locally
 
 Queue messages may never be delivered when running locally with `wrangler dev`. Miniflare's local queue consumer does not work reliably with Python Workers. The workaround is building a synchronous `POST /process-now` endpoint that runs your pipeline inline:
 
@@ -1465,7 +1458,7 @@ class Default(WorkerEntrypoint):
 
 Verify actual queue behavior on real Cloudflare infrastructure, not locally.
 
-### 18. Large binary data crashing the Worker
+### 17. Large binary data crashing the Worker
 
 The round-trip for large R2 objects (over ~10MB) — JavaScript ReadableStream to Python bytes to JavaScript Response body — doubles memory in WebAssembly linear memory and can crash the Worker. For large binary serving, bypass Python entirely by passing the ReadableStream directly to a JavaScript Response constructor. For small payloads (under ~2MB), reading into Python bytes is fine.
 
@@ -1533,19 +1526,6 @@ await env.BUCKET.put("key", my_bytes)
 
 # ALWAYS — convert to Uint8Array
 await env.BUCKET.put("key", to_js(my_bytes))
-```
-
-### Using synchronous HTTP libraries
-
-```python
-# NEVER — raw sockets blocked in Pyodide
-import requests
-response = requests.get(url)
-
-# ALWAYS — async only
-import httpx
-async with httpx.AsyncClient() as client:
-    response = await client.get(url)
 ```
 
 ---

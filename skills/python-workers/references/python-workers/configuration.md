@@ -93,7 +93,7 @@ requires-python = ">=3.12"
 dependencies = [
     # Only packages deployed to Workers go here
     "feedparser>=6.0.0",
-    "httpx>=0.27.0",         # Async HTTP — requests/urllib3 won't work
+    "httpx>=0.27.0",         # Async HTTP client
     "jinja2>=3.1.0",
     "bleach>=6.0.0",
 ]
@@ -132,16 +132,13 @@ uv run pywrangler types
 
 ### What doesn't work
 
-- **Sync HTTP libraries**: `requests`, `urllib3` — blocked by Pyodide's socket restrictions
 - **Native C extensions** not in Pyodide: `psycopg2`, `lxml`, `cryptography`
-- **OS-specific modules**: See gotchas.md #12
+- **OS-specific modules**: See gotchas.md #11
 
 ### Alternatives
 
 | Doesn't Work | Use Instead |
 |---------------|-------------|
-| `requests` | `httpx` (async) or `aiohttp` |
-| `urllib3` | `httpx` (async) |
 | `lxml` | `xml.etree.ElementTree` (stdlib) |
 | `psycopg2` | D1 binding (it's SQLite) |
 | `cryptography` | `hashlib`, `hmac` (stdlib) |
@@ -267,7 +264,7 @@ Your source code must be importable outside the Workers runtime. This means FFI 
 - [README.md](README.md) — Runtime overview, quick start, project structure
 - [api.md](api.md) — Handler signatures, FFI functions, bindings, Workflows
 - [patterns.md](patterns.md) — FFI boundary, D1 conversion, Static Assets, DOs, testing
-- [gotchas.md](gotchas.md) — 18 Python-specific issues with error signatures and fixes
+- [gotchas.md](gotchas.md) — 17 Python-specific issues with error signatures and fixes
 - [Cloudflare Python Workers Docs](https://developers.cloudflare.com/workers/languages/python/)
 - [Python Workers Examples](https://github.com/cloudflare/python-workers-examples)
 - [Pyodide Package List](https://pyodide.org/en/stable/usage/packages-in-pyodide.html)
