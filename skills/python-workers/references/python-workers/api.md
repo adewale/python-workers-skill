@@ -220,15 +220,16 @@ import js
 JS_NULL = js.JSON.parse("null")  # js.eval("null") is disallowed in Workers
 ```
 
-### Checking for JS undefined
+### Checking for JS null
+
+JS `undefined` arrives in Python as `None`, so `value is None` already covers it. JS `null` arrives as the `jsnull` sentinel from `pyodide.ffi`:
 
 ```python
-def _is_js_undefined(value):
-    """JS undefined wrapped as JsProxy looks like a value but isn't."""
-    if value is None:
-        return False
-    return (str(type(value)) == "<class 'pyodide.ffi.JsProxy'>"
-            and str(value) == "undefined")
+from pyodide.ffi import jsnull
+
+def _is_missing(value):
+    """True for Python None (which includes JS undefined) or JS null."""
+    return value is None or value is jsnull
 ```
 
 ### FFI Type-Compatibility Matrix
@@ -255,8 +256,8 @@ What happens when Python types cross to JS and vice versa. This table prevents s
 |---------|---------------------|:-:|:-:|-------|
 | `Object` | `JsProxy` | No | `dict` | Must call `.to_py()` |
 | `Array` | `JsProxy` | No | `list` | Not iterable as Python list |
-| `null` | `JsNull` | N/A | N/A | **NOT** Python `None`; `type(x).__name__ == "JsNull"` |
-| `undefined` | `JsUndefined` | N/A | N/A | **NOT** Python `None` |
+| `null` | `jsnull` | N/A | N/A | **NOT** Python `None`; import via `from pyodide.ffi import jsnull` |
+| `undefined` | `None` | N/A | N/A | JS `undefined` becomes Python `None` |
 | `string` | `str` | N/A | N/A | Auto-converted |
 | `number` | `int`/`float` | N/A | N/A | Auto-converted |
 | `boolean` | `bool` | N/A | N/A | Auto-converted |

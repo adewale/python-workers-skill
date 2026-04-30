@@ -112,24 +112,19 @@ await env.DB.prepare("UPDATE feeds SET etag = ?").bind(JS_NULL).run()
 
 **`is None` is never enough at the FFI boundary.** JS `null` and `undefined` both arrive as distinct JsProxy types — neither is Python `None`:
 
-| Value | `is None` | `bool()` | `type().__name__` |
-|-------|:---------:|:--------:|:------------------:|
-| Python `None` | `True` | `False` | `NoneType` |
-| JS `null` (JsNull) | **`False`** | `False` | `JsNull` |
-| JS `undefined` (JsUndefined) | **`False`** | `False` | `JsUndefined` |
+| Value | `is None` | `bool()` | Notes |
+|-------|:---------:|:--------:|-------|
+| Python `None` | `True` | `False` | JS `undefined` also arrives here |
+| JS `null` (`jsnull`) | **`False`** | `False` | Sentinel from `pyodide.ffi` |
 
-**Rule**: Any boundary code with `if x is None` must also check for JsNull and JsUndefined. Use a helper:
+**Rule**: Any boundary code with `if x is None` must also check for `jsnull`. Use a helper:
 
 ```python
-def _is_js_null_or_undefined(value):
-    """Check for JS null or undefined — both are falsy but NOT Python None."""
-    if value is None:
-        return False
-    return type(value).__name__ in ("JsNull", "JsUndefined")
+from pyodide.ffi import jsnull
 
 def _is_missing(value):
-    """True for Python None, JS null, or JS undefined."""
-    return value is None or _is_js_null_or_undefined(value)
+    """True for Python None (which includes JS undefined) or JS null."""
+    return value is None or value is jsnull
 ```
 
 ---

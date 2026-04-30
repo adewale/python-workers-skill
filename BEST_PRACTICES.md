@@ -252,18 +252,12 @@ def _to_py_safe(value, depth=0):
         return value
     if value is None:
         return None
-    if _is_js_undefined(value):
-        return None
     if hasattr(value, 'to_py'):
         return value.to_py()
     return value
-
-def _is_js_undefined(value):
-    if value is None:
-        return False
-    return (str(type(value)) == "<class 'pyodide.ffi.JsProxy'>"
-            and str(value) == "undefined")
 ```
+
+Note: JS `undefined` arrives in Python as `None`, so `value is None` already covers it. There is no separate `JsUndefined` type.
 
 ### The FFI Boundary Layer Pattern
 
@@ -280,8 +274,8 @@ class SafeR2:
 
     async def get(self, key):
         obj = await self._bucket.get(key)
-        if obj is None or obj is jsnull:
-            return None  # Guard reads: JsNull/JsUndefined -> None
+        if obj is jsnull:
+            return None  # Guard reads: JsNull -> None
         return obj
 
     async def put(self, key, data):
@@ -290,9 +284,9 @@ class SafeR2:
         await self._bucket.put(key, data)
 ```
 
-This pattern applies to any binding wrapper — SafeD1, SafeKV, SafeQueue. Every method that reads from JavaScript must check for JsNull/JsUndefined. Every method that writes to JavaScript must convert Python types appropriately.
+This pattern applies to any binding wrapper — SafeD1, SafeKV, SafeQueue. Every method that reads from JavaScript must check for JsNull. Every method that writes to JavaScript must convert Python types appropriately.
 
-For environment variables, which can also be JsProxy or undefined:
+For environment variables, which can also be JsProxy or missing:
 
 ```python
 class SafeEnv:
@@ -300,13 +294,7 @@ class SafeEnv:
         self._env = env
 
     def get(self, key: str, default: str = "") -> str:
-        try:
-            value = getattr(self._env, key, None)
-            if value is None or _is_js_undefined(value):
-                return default
-            return str(value)
-        except Exception:
-            return default
+        return getattr(self._env, key, default)
 ```
 
 ### The `None` / `null` / `undefined` Problem
@@ -333,20 +321,17 @@ The fix for sending `null` to JavaScript:
 from pyodide.ffi import jsnull
 ```
 
-For checking whether a value from JavaScript is "missing," use a helper that covers all three cases:
+For checking whether a value from JavaScript is "missing," use a helper that covers both cases:
 
 ```python
 from pyodide.ffi import jsnull
-def _is_js_null_or_undefined(value):
-    """Check for JS null or undefined — null is jsnull, undefined is None"""
-    return value is jsnull or value is None
 
 def _is_missing(value):
-    """True for Python None, JS null, or JS undefined."""
-    return _is_js_null_or_undefined(value)
+    """True for Python None (which includes JS undefined) or JS null."""
+    return value is None or value is jsnull
 ```
 
-**Rule**: Any boundary code that uses `if x is None` must also check for JsNull and JsUndefined, or use `_is_missing()`.
+**Rule**: Any boundary code that uses `if x is None` must also check for `jsnull`, or use `_is_missing()`.
 
 ### FFI Type-Compatibility Matrix
 
@@ -1147,7 +1132,7 @@ def pyodide_fakes(monkeypatch):
     monkeypatch.setattr(wrappers, "JS_NULL", JsNull())
 ```
 
-This lets you test that `_to_py_safe` correctly calls `.to_py()`, that `_is_js_null_or_undefined` detects the right types, and that `_to_js_value` calls `to_js` with `dict_converter` — all without running inside Pyodide.
+This lets you test that `_to_py_safe` correctly calls `.to_py()`, that `_is_missing` detects the right types, and that `_to_js_value` calls `to_js` with `dict_converter` — all without running inside Pyodide.
 
 Maintain two test files per wrapper module:
 - `test_wrappers.py` — CPython tests with `HAS_PYODIDE=False` (tests fallback/logic)
