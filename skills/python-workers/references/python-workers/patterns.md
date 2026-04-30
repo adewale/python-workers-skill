@@ -40,14 +40,13 @@ Makes your code importable in both Workers and pytest:
 try:
     import js
     from js import fetch as js_fetch
-    from pyodide.ffi import to_js
+    from pyodide.ffi import to_js, jsnull
     HAS_PYODIDE = True
-    JS_NULL = js.JSON.parse("null")  # js.eval() is disallowed
 except ImportError:
     js = None
     js_fetch = None
     to_js = None
-    JS_NULL = None
+    jsnull = None
     HAS_PYODIDE = False
 ```
 
@@ -85,7 +84,7 @@ def _to_js_value(value):
 
 The FFI boundary must handle both directions:
 - **JS to Python reads**: `.to_py()`, `jsnull` detection
-- **Python to JS writes**: `to_js()` with `dict_converter`, `to_js(bytes)`, `None` to `JS_NULL`
+- **Python to JS writes**: `to_js()` with `dict_converter`, `to_js(bytes)`, `None` to `jsnull`
 
 Design `Safe*` wrapper classes that guard both directions:
 
@@ -158,10 +157,12 @@ rows = feed_rows_from_d1(result)
 
 ```python
 # Python None → JS undefined (wrong for D1 NULL)
-# Use JS_NULL for SQL NULL values
+# Use jsnull for SQL NULL values
+from pyodide.ffi import jsnull
+
 await env.DB.prepare(
     "UPDATE feeds SET etag = ? WHERE id = ?"
-).bind(JS_NULL, feed_id).run()
+).bind(jsnull, feed_id).run()
 ```
 
 ---
@@ -855,7 +856,10 @@ class FakeJsProxy:
         return self._data
 
 class JsNull:
-    """JS null sentinel — NOT Python None."""
+    """JS null sentinel — NOT Python None.
+
+    Stand-in for `pyodide.ffi.jsnull` in CPython tests.
+    """
     def __bool__(self):
         return False
 JsNull.__name__ = "JsNull"
@@ -872,7 +876,7 @@ def pyodide_fakes(monkeypatch):
     monkeypatch.setattr(wrappers, "HAS_PYODIDE", True)
     monkeypatch.setattr(wrappers, "js", FakeJsModule())
     monkeypatch.setattr(wrappers, "to_js", fake_to_js)
-    monkeypatch.setattr(wrappers, "JS_NULL", JsNull())
+    monkeypatch.setattr(wrappers, "jsnull", JsNull())
 ```
 
 This lets you test that `_to_py_safe` correctly calls `.to_py()`, that `_is_missing` detects fakes, and that `_to_js_value` calls `to_js` with `dict_converter` — all without running inside Pyodide.

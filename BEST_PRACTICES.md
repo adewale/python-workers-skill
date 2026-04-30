@@ -275,7 +275,7 @@ class SafeR2:
     async def get(self, key):
         obj = await self._bucket.get(key)
         if obj is jsnull:
-            return None  # Guard reads: JsNull -> None
+            return None  # Guard reads: jsnull -> None
         return obj
 
     async def put(self, key, data):
@@ -284,7 +284,7 @@ class SafeR2:
         await self._bucket.put(key, data)
 ```
 
-This pattern applies to any binding wrapper — SafeD1, SafeKV, SafeQueue. Every method that reads from JavaScript must check for JsNull. Every method that writes to JavaScript must convert Python types appropriately.
+This pattern applies to any binding wrapper — SafeD1, SafeKV, SafeQueue. Every method that reads from JavaScript must check for `jsnull`. Every method that writes to JavaScript must convert Python types appropriately.
 
 For environment variables, which can also be JsProxy or missing:
 
@@ -305,7 +305,7 @@ Going from Python to JavaScript:
 - Python `None` becomes JavaScript `undefined` (NOT `null`)
 
 Going from JavaScript to Python:
-- JavaScript `null` arrives as a `JsNull` object (NOT Python `None`)
+- JavaScript `null` arrives as the `jsnull` sentinel from `pyodide.ffi` (NOT Python `None`)
 - JavaScript `undefined` arrives as a Python `None`
 
 This matters in practice because D1 expects `null` for SQL NULL values, but Python `None` gives it `undefined` instead, which D1 rejects.
@@ -313,7 +313,7 @@ This matters in practice because D1 expects `null` for SQL NULL values, but Pyth
 | Value | `is None` | `bool()` | `type().__name__` |
 |-------|:---------:|:--------:|:-----------------:|
 | Python `None` | `True` | `False` | `NoneType` |
-| JS `null` (JsNull) | **`False`** | `False` | `JsNull` |
+| JS `null` (`jsnull`) | **`False`** | `False` | `JsNull` |
 
 The fix for sending `null` to JavaScript:
 
@@ -345,7 +345,7 @@ This table shows what happens when types cross the boundary. Read it once, bookm
 | `int` | `number` | OK | OK | OK | |
 | `float` | `number` | OK | OK | OK | |
 | `bool` | `boolean` | OK | OK | OK | |
-| `None` | `undefined` | **BREAKS** | OK | OK | D1 rejects `undefined`; use `JS_NULL` |
+| `None` | `undefined` | **BREAKS** | OK | OK | D1 rejects `undefined`; use `jsnull` |
 | `dict` | `Map` | N/A | N/A | **Fails silently** | Use `to_js(d, dict_converter=Object.fromEntries)` |
 | `list` | `Array` | N/A | OK | OK | Via `to_js()` |
 | `bytes` | `PyProxy` | **BREAKS** | **BREAKS** | **BREAKS** | Must use `to_js(data)` to get Uint8Array |
@@ -357,7 +357,7 @@ This table shows what happens when types cross the boundary. Read it once, bookm
 |---------|---------------------|:-:|:-:|-------|
 | `Object` | `JsProxy` | No | `dict` | Must call `.to_py()` |
 | `Array` | `JsProxy` | No | `list` | |
-| `null` | `JsNull` | N/A | N/A | **NOT** Python `None`; `type(x).__name__ == "JsNull"` |
+| `null` | `jsnull` | N/A | N/A | **NOT** Python `None`; `from pyodide.ffi import jsnull` |
 | `undefined` | `None` | N/A | N/A |  |
 | `string` | `str` | N/A | N/A | Auto-converted |
 | `number` | `int`/`float` | N/A | N/A | Auto-converted |
@@ -524,13 +524,14 @@ result = await env.DB.prepare(
 ).bind(feed_id, cutoff_date, limit).all()
 ```
 
-The NULL caveat: Python `None` becomes JavaScript `undefined`, but D1 needs `null` for SQL NULL values. Use the `JS_NULL` pattern:
+The NULL caveat: Python `None` becomes JavaScript `undefined`, but D1 needs `null` for SQL NULL values. Use the `jsnull` sentinel:
 
 ```python
-JS_NULL = js.JSON.parse("null")
+from pyodide.ffi import jsnull
+
 await env.DB.prepare(
     "UPDATE feeds SET etag = ? WHERE id = ?"
-).bind(JS_NULL, feed_id).run()
+).bind(jsnull, feed_id).run()
 ```
 
 ### KV (Key-Value Store)
@@ -965,14 +966,13 @@ This pattern makes your code importable in both the Workers runtime and pytest:
 try:
     import js
     from js import fetch as js_fetch
-    from pyodide.ffi import to_js
+    from pyodide.ffi import to_js, jsnull
     HAS_PYODIDE = True
-    JS_NULL = js.JSON.parse("null")  # js.eval() is disallowed
 except ImportError:
     js = None
     js_fetch = None
     to_js = None
-    JS_NULL = None
+    jsnull = None
     HAS_PYODIDE = False
 ```
 
@@ -1115,7 +1115,10 @@ class FakeJsProxy:
         return self._data
 
 class JsNull:
-    """JS null sentinel — NOT Python None."""
+    """JS null sentinel — NOT Python None.
+
+    Stand-in for `pyodide.ffi.jsnull` in CPython tests.
+    """
     def __bool__(self):
         return False
 JsNull.__name__ = "JsNull"
@@ -1129,7 +1132,7 @@ def pyodide_fakes(monkeypatch):
     monkeypatch.setattr(wrappers, "HAS_PYODIDE", True)
     monkeypatch.setattr(wrappers, "js", FakeJsModule())
     monkeypatch.setattr(wrappers, "to_js", fake_to_js)
-    monkeypatch.setattr(wrappers, "JS_NULL", JsNull())
+    monkeypatch.setattr(wrappers, "jsnull", JsNull())
 ```
 
 This lets you test that `_to_py_safe` correctly calls `.to_py()`, that `_is_missing` detects the right types, and that `_to_js_value` calls `to_js` with `dict_converter` — all without running inside Pyodide.
@@ -1386,7 +1389,7 @@ If you see `TypeError: on_fetch is not defined`, you are using the deprecated `@
 
 ### 4. Assuming `None` equals `null`
 
-Python `None` maps to JavaScript `undefined`, not `null`. JavaScript `null` arrives in Python as a `JsNull` object, not `None`. JavaScript `undefined` arrives as `None`. This causes real bugs with D1, which needs `null` for SQL NULL. Use `from pyodide.ffi import jsnull` to create a proper JavaScript null. And any code that checks `if x is None` at the FFI boundary must also check for `jsnull`. See the [None/null/undefined section](#the-none--null--undefined-problem) for the full details and helper functions.
+Python `None` maps to JavaScript `undefined`, not `null`. JavaScript `null` arrives in Python as the `jsnull` sentinel from `pyodide.ffi`, not `None`. JavaScript `undefined` arrives as `None`. This causes real bugs with D1, which needs `null` for SQL NULL. Use `from pyodide.ffi import jsnull` to pass a proper JavaScript null. And any code that checks `if x is None` at the FFI boundary must also check for `jsnull`. See the [None/null/undefined section](#the-none--null--undefined-problem) for the full details and helper functions.
 
 ### 5. Using `js.eval()`
 

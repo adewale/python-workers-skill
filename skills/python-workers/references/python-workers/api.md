@@ -211,13 +211,14 @@ result = rewriter.transform(response.js_object)
 handler.destroy()  # Release when done (except in long-lived DOs)
 ```
 
-### JS null Creation
+### JS null
 
-Python `None` maps to JS `undefined`, NOT `null`. For APIs that need `null` (D1 SQL NULL):
+Python `None` maps to JS `undefined`, NOT `null`. For APIs that need `null` (D1 SQL NULL), use the `jsnull` sentinel:
 
 ```python
-import js
-JS_NULL = js.JSON.parse("null")  # js.eval("null") is disallowed in Workers
+from pyodide.ffi import jsnull
+
+await env.DB.prepare("UPDATE feeds SET etag = ?").bind(jsnull).run()
 ```
 
 ### Checking for JS null
@@ -244,7 +245,7 @@ What happens when Python types cross to JS and vice versa. This table prevents s
 | `int` | `number` | OK | OK | OK | |
 | `float` | `number` | OK | OK | OK | |
 | `bool` | `boolean` | OK | OK | OK | |
-| `None` | `undefined` | **BREAKS** | OK | OK | D1 rejects `undefined`; use `JS_NULL` |
+| `None` | `undefined` | **BREAKS** | OK | OK | D1 rejects `undefined`; use `jsnull` |
 | `dict` | `Map` | N/A | N/A | **Fails silently** | Use `to_js(d, dict_converter=Object.fromEntries)` |
 | `list` | `Array` | N/A | OK | OK | Via `to_js()` |
 | `bytes` | `PyProxy` | **BREAKS** | **BREAKS** | **BREAKS** | Must use `to_js(data)` to get Uint8Array |
