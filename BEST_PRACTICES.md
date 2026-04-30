@@ -280,7 +280,7 @@ class SafeR2:
 
     async def get(self, key):
         obj = await self._bucket.get(key)
-        if obj is None or _is_js_null_or_undefined(obj):
+        if obj is None or obj is jsnull:
             return None  # Guard reads: JsNull/JsUndefined -> None
         return obj
 
@@ -318,7 +318,7 @@ Going from Python to JavaScript:
 
 Going from JavaScript to Python:
 - JavaScript `null` arrives as a `JsNull` object (NOT Python `None`)
-- JavaScript `undefined` arrives as a `JsUndefined` object (NOT Python `None`)
+- JavaScript `undefined` arrives as a Python `None`
 
 This matters in practice because D1 expects `null` for SQL NULL values, but Python `None` gives it `undefined` instead, which D1 rejects.
 
@@ -326,29 +326,24 @@ This matters in practice because D1 expects `null` for SQL NULL values, but Pyth
 |-------|:---------:|:--------:|:-----------------:|
 | Python `None` | `True` | `False` | `NoneType` |
 | JS `null` (JsNull) | **`False`** | `False` | `JsNull` |
-| JS `undefined` (JsUndefined) | **`False`** | `False` | `JsUndefined` |
 
 The fix for sending `null` to JavaScript:
 
 ```python
-import js
-JS_NULL = js.JSON.parse("null")  # js.eval("null") is disallowed in Workers
+from pyodide.ffi import jsnull
 ```
-
-You might wonder why not `js.eval("null")`. Workers have a security policy that blocks `eval()` entirely — including `js.eval()`. The error message is `EvalError: Code generation from strings disallowed for this context`. The `js.JSON.parse("null")` trick is the workaround.
 
 For checking whether a value from JavaScript is "missing," use a helper that covers all three cases:
 
 ```python
+from pyodide.ffi import jsnull
 def _is_js_null_or_undefined(value):
-    """Check for JS null or undefined — both are falsy but NOT Python None."""
-    if value is None:
-        return False
-    return type(value).__name__ in ("JsNull", "JsUndefined")
+    """Check for JS null or undefined — null is jsnull, undefined is None"""
+    return value is jsnull or value is None
 
 def _is_missing(value):
     """True for Python None, JS null, or JS undefined."""
-    return value is None or _is_js_null_or_undefined(value)
+    return _is_js_null_or_undefined(value)
 ```
 
 **Rule**: Any boundary code that uses `if x is None` must also check for JsNull and JsUndefined, or use `_is_missing()`.
@@ -376,9 +371,9 @@ This table shows what happens when types cross the boundary. Read it once, bookm
 | JS Type | Arrives as in Python | Subscriptable? | `.to_py()` | Notes |
 |---------|---------------------|:-:|:-:|-------|
 | `Object` | `JsProxy` | No | `dict` | Must call `.to_py()` |
-| `Array` | `JsProxy` | No | `list` | Not iterable as Python list |
+| `Array` | `JsProxy` | No | `list` | |
 | `null` | `JsNull` | N/A | N/A | **NOT** Python `None`; `type(x).__name__ == "JsNull"` |
-| `undefined` | `JsUndefined` | N/A | N/A | **NOT** Python `None` |
+| `undefined` | `None` | N/A | N/A |  |
 | `string` | `str` | N/A | N/A | Auto-converted |
 | `number` | `int`/`float` | N/A | N/A | Auto-converted |
 | `boolean` | `bool` | N/A | N/A | Auto-converted |
@@ -1139,11 +1134,6 @@ class JsNull:
     def __bool__(self):
         return False
 JsNull.__name__ = "JsNull"
-
-class _Undefined:
-    """JS undefined singleton."""
-    pass
-_Undefined.__name__ = "JsUndefined"
 ```
 
 Then use a pytest fixture to activate the production path:
@@ -1411,7 +1401,7 @@ If you see `TypeError: on_fetch is not defined`, you are using the deprecated `@
 
 ### 4. Assuming `None` equals `null`
 
-Python `None` maps to JavaScript `undefined`, not `null`. JavaScript `null` arrives in Python as a `JsNull` object, not `None`. JavaScript `undefined` arrives as `JsUndefined`, also not `None`. This causes real bugs with D1, which needs `null` for SQL NULL. Use `js.JSON.parse("null")` to create a proper JavaScript null. And any code that checks `if x is None` at the FFI boundary must also check for JsNull and JsUndefined. See the [None/null/undefined section](#the-none--null--undefined-problem) for the full details and helper functions.
+Python `None` maps to JavaScript `undefined`, not `null`. JavaScript `null` arrives in Python as a `JsNull` object, not `None`. JavaScript `undefined` arrives as `None`. This causes real bugs with D1, which needs `null` for SQL NULL. Use `from pyodide.ffi import jsnull` to create a proper JavaScript null. And any code that checks `if x is None` at the FFI boundary must also check for `jsnull`. See the [None/null/undefined section](#the-none--null--undefined-problem) for the full details and helper functions.
 
 ### 5. Using `js.eval()`
 
