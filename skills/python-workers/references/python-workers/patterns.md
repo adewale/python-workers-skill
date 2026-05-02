@@ -40,14 +40,13 @@ Makes your code importable in both Workers and pytest:
 try:
     import js
     from js import fetch as js_fetch
-    from pyodide.ffi import to_js
+    from pyodide.ffi import to_js, jsnull
     HAS_PYODIDE = True
-    JS_NULL = js.JSON.parse("null")  # js.eval() is disallowed
 except ImportError:
     js = None
     js_fetch = None
     to_js = None
-    JS_NULL = None
+    jsnull = None
     HAS_PYODIDE = False
 ```
 
@@ -62,18 +61,12 @@ def _to_py_safe(value, depth=0):
         return value
     if value is None:
         return None
-    if _is_js_undefined(value):
-        return None
     if hasattr(value, 'to_py'):
         return value.to_py()
     return value
-
-def _is_js_undefined(value):
-    if value is None:
-        return False
-    return (str(type(value)) == "<class 'pyodide.ffi.JsProxy'>"
-            and str(value) == "undefined")
 ```
+
+JS `undefined` arrives in Python as `None`, so `value is None` already covers it. There is no separate `JsUndefined` type.
 
 ### Python-to-JS helper
 
@@ -90,8 +83,8 @@ def _to_js_value(value):
 ### The boundary is bidirectional
 
 The FFI boundary must handle both directions:
-- **JS to Python reads**: `.to_py()`, JsNull/JsUndefined detection
-- **Python to JS writes**: `to_js()` with `dict_converter`, `to_js(bytes)`, `None` to `JS_NULL`
+- **JS to Python reads**: `.to_py()`, `jsnull` detection
+- **Python to JS writes**: `to_js()` with `dict_converter`, `to_js(bytes)`, `None` to `jsnull`
 
 Design `Safe*` wrapper classes that guard both directions:
 
@@ -102,8 +95,8 @@ class SafeR2:
 
     async def get(self, key):
         obj = await self._bucket.get(key)
-        if obj is None or _is_js_null_or_undefined(obj):
-            return None  # Guard reads: JsNull/JsUndefined → None
+        if obj is None or obj is jsnull:
+            return None  # Guard reads: None/jsnull → None
         return obj
 
     async def put(self, key, data):
@@ -112,11 +105,11 @@ class SafeR2:
         await self._bucket.put(key, data)
 ```
 
-This pattern applies to any binding wrapper — SafeD1, SafeKV, SafeQueue. Every method that reads from JS must check for JsNull/JsUndefined. Every method that writes to JS must convert Python types appropriately.
+This pattern applies to any binding wrapper — SafeD1, SafeKV, SafeQueue. Every method that reads from JS must check for `jsnull` (and `None`). Every method that writes to JS must convert Python types appropriately.
 
 ### Safe environment access
 
-`self.env` attributes can be JsProxy or undefined. Wrap for safety:
+`self.env` attributes can be JsProxy or missing. Wrap for safety:
 
 ```python
 class SafeEnv:
@@ -124,13 +117,7 @@ class SafeEnv:
         self._env = env
 
     def get(self, key: str, default: str = "") -> str:
-        try:
-            value = getattr(self._env, key, None)
-            if value is None or _is_js_undefined(value):
-                return default
-            return str(value)
-        except Exception:
-            return default
+        return getattr(self._env, key, default)
 ```
 
 ---
@@ -170,10 +157,12 @@ rows = feed_rows_from_d1(result)
 
 ```python
 # Python None → JS undefined (wrong for D1 NULL)
-# Use JS_NULL for SQL NULL values
+# Use jsnull for SQL NULL values
+from pyodide.ffi import jsnull
+
 await env.DB.prepare(
     "UPDATE feeds SET etag = ? WHERE id = ?"
-).bind(JS_NULL, feed_id).run()
+).bind(jsnull, feed_id).run()
 ```
 
 ---
@@ -867,16 +856,17 @@ class FakeJsProxy:
         return self._data
 
 class JsNull:
-    """JS null sentinel — NOT Python None."""
+    """JS null sentinel — NOT Python None.
+
+    Stand-in for `pyodide.ffi.jsnull` in CPython tests.
+    """
     def __bool__(self):
         return False
 JsNull.__name__ = "JsNull"
 
-class _Undefined:
-    """JS undefined singleton."""
-    pass
-_Undefined.__name__ = "JsUndefined"
 ```
+
+JS `undefined` arrives in Python as `None`, so no separate fake is needed for it.
 
 And the fixture to activate the production path:
 
@@ -886,10 +876,10 @@ def pyodide_fakes(monkeypatch):
     monkeypatch.setattr(wrappers, "HAS_PYODIDE", True)
     monkeypatch.setattr(wrappers, "js", FakeJsModule())
     monkeypatch.setattr(wrappers, "to_js", fake_to_js)
-    monkeypatch.setattr(wrappers, "JS_NULL", JsNull())
+    monkeypatch.setattr(wrappers, "jsnull", JsNull())
 ```
 
-This lets you test that `_to_py_safe` correctly calls `.to_py()`, that `_is_js_null_or_undefined` detects fakes, and that `_to_js_value` calls `to_js` with `dict_converter` — all without running inside Pyodide.
+This lets you test that `_to_py_safe` correctly calls `.to_py()`, that `_is_missing` detects fakes, and that `_to_js_value` calls `to_js` with `dict_converter` — all without running inside Pyodide.
 
 ### Running tests
 

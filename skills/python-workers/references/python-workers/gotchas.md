@@ -11,8 +11,8 @@ Issues that are **specific to Python Workers**. General Cloudflare Workers issue
 | 1 | Old handler pattern | `on_fetch is not defined` | Use `WorkerEntrypoint` class |
 | 2 | Sync HTTP library | `blocking call in async context` | Use `httpx` or `aiohttp` |
 | 3 | to_py is a method | `cannot import name 'to_py'` | Call `.to_py()` on the JsProxy |
-| 4 | None ≠ null ≠ undefined | D1 NULL/undefined issues | Use `js.JSON.parse("null")` |
-| 5 | js.eval() blocked | `Code generation disallowed` | Use `js.JSON.parse()` |
+| 4 | None = undefined ≠ null | D1 NULL/undefined issues | Import `jsnull` from `pyodide.ffi` |
+| 5 | js.eval() blocked | `Code generation disallowed` | Use a non-eval alternative (e.g. `js.JSON.parse()`) |
 | 6 | Dict → Map | API rejects Python dict | Use `dict_converter=Object.fromEntries` |
 | 7 | Slow cold start | First request 1-10s | Add `python_dedicated_snapshot` flag |
 | 8 | PRNG at init | Deploy fails | Move `random`/`secrets` into handlers |
@@ -89,15 +89,14 @@ Note: `to_js` IS a standalone function. Only `to_py` is asymmetric.
 
 ---
 
-## #4: None vs null vs undefined
+## #4: None = undefined ≠ null
 
-Python `None` → JS `undefined` (NOT `null`). Three distinct values cross the boundary:
+The two distinct JS values `null` and `undefined` correspond to the two distinct Python values `jsnull` and `None`. Python `None` → JS `undefined` (NOT `null`):
 
 | Python | JavaScript | Notes |
 |--------|------------|-------|
 | `None` | `undefined` | Default mapping |
-| `JS_NULL` | `null` | Must create explicitly |
-| `None` (from `.to_py()`) | was `null` | JS null becomes Python None |
+| `jsnull` | `null` | Import `from pyodide.ffi import jsnull` |
 
 **Problem**: D1 expects `null` for SQL NULL, but gets `undefined` from Python `None`.
 
@@ -106,30 +105,25 @@ Python `None` → JS `undefined` (NOT `null`). Three distinct values cross the b
 await env.DB.prepare("UPDATE feeds SET etag = ?").bind(None).run()
 
 # CORRECT
-JS_NULL = js.JSON.parse("null")
-await env.DB.prepare("UPDATE feeds SET etag = ?").bind(JS_NULL).run()
+from pyodide.ffi import jsnull
+await env.DB.prepare("UPDATE feeds SET etag = ?").bind(jsnull).run()
 ```
 
 **`is None` is never enough at the FFI boundary.** JS `null` and `undefined` both arrive as distinct JsProxy types — neither is Python `None`:
 
-| Value | `is None` | `bool()` | `type().__name__` |
-|-------|:---------:|:--------:|:------------------:|
-| Python `None` | `True` | `False` | `NoneType` |
-| JS `null` (JsNull) | **`False`** | `False` | `JsNull` |
-| JS `undefined` (JsUndefined) | **`False`** | `False` | `JsUndefined` |
+| Value | `is None` | `bool()` | Notes |
+|-------|:---------:|:--------:|-------|
+| Python `None` | `True` | `False` | JS `undefined` also arrives here |
+| JS `null` (`jsnull`) | **`False`** | `False` | Sentinel from `pyodide.ffi` |
 
-**Rule**: Any boundary code with `if x is None` must also check for JsNull and JsUndefined. Use a helper:
+**Rule**: Any boundary code with `if x is None` must also check for `jsnull`. Use a helper:
 
 ```python
-def _is_js_null_or_undefined(value):
-    """Check for JS null or undefined — both are falsy but NOT Python None."""
-    if value is None:
-        return False
-    return type(value).__name__ in ("JsNull", "JsUndefined")
+from pyodide.ffi import jsnull
 
 def _is_missing(value):
-    """True for Python None, JS null, or JS undefined."""
-    return value is None or _is_js_null_or_undefined(value)
+    """True for Python None (which includes JS undefined) or JS null."""
+    return value is None or value is jsnull
 ```
 
 ---
@@ -138,15 +132,7 @@ def _is_missing(value):
 
 **Error**: `EvalError: Code generation from strings disallowed for this context`
 
-Workers security policy blocks `eval()`.
-
-```python
-# WRONG
-JS_NULL = js.eval("null")
-
-# CORRECT
-JS_NULL = js.JSON.parse("null")
-```
+Workers security policy blocks `eval()`. Anything that runs JS source from a string at runtime is rejected — use a non-eval alternative (e.g. `js.JSON.parse()` for parsing JSON, `from pyodide.ffi import jsnull` for a `null` sentinel).
 
 **Watch out for libraries that use js.eval() internally.** Some Python libraries call `js.eval()` under the hood to load JS dependencies. Example: `python-readability` loads Mozilla Readability via `js.eval()` and will fail with the same error. The workaround for JS-native functionality is a Service Binding to a JS Worker:
 
