@@ -16,7 +16,7 @@ Cloudflare Python Workers run Python 3.12+ via **Pyodide** (CPython compiled to 
 | Dict→JS object | Automatic | Requires `to_js(dict, dict_converter=Object.fromEntries)` |
 | `None` | N/A | Maps to JS `undefined`, NOT `null` |
 | HTTP clients | `fetch()`, any npm package | `workers.fetch()`, `httpx`/`aiohttp`; some sync clients work but block the handler |
-| Packages | npm (anything) | Pure Python + Pyodide-compiled only |
+| Packages | npm (anything) | Pure Python + packages built for Pyodide |
 | PRNG at init | Works | Fails (breaks Wasm snapshot) |
 | Templates | File I/O | No writable FS; bundle at deploy time |
 | Testing | Miniflare / Vitest | pytest with mock bindings + HAS_PYODIDE guard |

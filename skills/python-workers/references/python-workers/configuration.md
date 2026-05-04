@@ -127,21 +127,24 @@ uv run pywrangler types
 ### What works
 
 - **Pure Python packages** from PyPI
-- **Pyodide packages** (compiled to WebAssembly): numpy, pandas, pillow, etc.
+- **Packages built for Pyodide** (included in the Pyodide distribution): numpy, pandas, Pillow, lxml, cryptography, pydantic, etc.
 - Full list: https://pyodide.org/en/stable/usage/packages-in-pyodide.html
 
 ### What doesn't work
 
-- **Native C extensions** not in Pyodide: `psycopg2`, `lxml`, `cryptography`
+- **Native C extensions not in Pyodide**: `psycopg2`/`psycopg2-binary`, `mysqlclient`, `pycurl`, `gevent`/`greenlet`, `uwsgi`
 - **OS-specific modules**: See gotchas.md #11
+
+Note: many native packages work in Pyodide, including `lxml`, `cryptography`, `numpy`, `pandas`, `Pillow`, `pydantic`, `pyarrow`, `scipy`, `bcrypt`, `pynacl`, `pycryptodome`, and ~250 more. Check the [Pyodide list](https://pyodide.org/en/stable/usage/packages-in-pyodide.html) first.
 
 ### Alternatives
 
 | Doesn't Work | Use Instead |
 |---------------|-------------|
-| `lxml` | `xml.etree.ElementTree` (stdlib) |
-| `psycopg2` | D1 binding (it's SQLite) |
-| `cryptography` | `hashlib`, `hmac` (stdlib) |
+| `psycopg2` / `psycopg2-binary` | D1 binding (SQLite), or Hyperdrive + `pg8000` (pure Python) |
+| `mysqlclient` | Hyperdrive + `PyMySQL` (pure Python) |
+| `pycurl` | `httpx` or `aiohttp` |
+| `gevent` / `greenlet` | `asyncio` (built in) |
 
 ### Confirmed working on Workers
 
@@ -154,7 +157,9 @@ uv run pywrangler types
 - `urllib3` — demonstrated sync HTTP client via `PoolManager`
 - `Jinja2` — templating
 - `bleach` — HTML sanitization
-- `beautifulsoup4` — HTML parsing (without lxml backend)
+- `beautifulsoup4` — HTML parsing (with or without `lxml` backend; both work)
+- `lxml` — XML/HTML parsing (built for Pyodide)
+- `cryptography` — full crypto primitives (built for Pyodide)
 - `Pydantic` — data validation and settings
 
 ### Adding packages
