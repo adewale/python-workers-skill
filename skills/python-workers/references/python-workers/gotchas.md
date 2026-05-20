@@ -261,18 +261,21 @@ Python Workers consume more CPU than JS Workers. Pyodide interpretation overhead
 
 **Error**: `ModuleNotFoundError` or build errors.
 
-Only pure Python packages and Pyodide-compiled packages work. Native C extensions cannot be compiled to WebAssembly automatically.
+Only pure Python packages and packages built for Pyodide work.
 
 Check: https://pyodide.org/en/stable/usage/packages-in-pyodide.html
 
-**Common alternatives**:
+**Many native packages work in Pyodide**, including `lxml`, `cryptography`, `numpy`, `pandas`, `Pillow`, `pydantic`, `pyarrow`, `scipy`, and many more. Check the [Pyodide package list](https://pyodide.org/en/stable/usage/packages-in-pyodide.html) before assuming a C extension won't work.
+
+**Common alternatives for packages that genuinely don't work**:
 | Doesn't Work | Use Instead |
 |---------------|-------------|
-| `lxml` | `xml.etree.ElementTree` |
-| `psycopg2` | D1 (SQLite) |
-| `cryptography` | `hashlib`/`hmac` from stdlib |
+| `psycopg2` / `psycopg2-binary` | D1 binding (SQLite), or Hyperdrive + `pg8000` (pure Python) |
+| `mysqlclient` | Hyperdrive + `PyMySQL` (pure Python) |
+| `pycurl` | `httpx` or `aiohttp` |
+| `gevent` / `greenlet` | `asyncio` (built into the runtime) |
 
-**lxml deserves special attention.** It is a C extension built on libxml2/libxslt, unavailable in Pyodide. This eliminates most Python HTML processing libraries that depend on it: Trafilatura, Newspaper4k, Goose3, ReadabiliPy, readability-lxml, jusText, and Inscriptis. Always check the **full dependency tree** for C extensions before choosing any library — a transitive dependency on lxml is enough to break your Worker.
+Always check the **full dependency tree** before choosing any library — a transitive dependency on a native extension that isn't in Pyodide is enough to break your Worker.
 
 Request new packages: https://github.com/cloudflare/workerd/discussions/categories/python-packages
 
