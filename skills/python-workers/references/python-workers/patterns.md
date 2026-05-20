@@ -95,7 +95,7 @@ class SafeR2:
 
     async def get(self, key):
         obj = await self._bucket.get(key)
-        if obj is None or obj is jsnull:
+        if _is_missing(obj):
             return None  # Guard reads: None/jsnull → None
         return obj
 
@@ -105,19 +105,38 @@ class SafeR2:
         await self._bucket.put(key, data)
 ```
 
-This pattern applies to any binding wrapper — SafeD1, SafeKV, SafeQueue. Every method that reads from JS must check for `jsnull` (and `None`). Every method that writes to JS must convert Python types appropriately.
+This pattern applies to any binding wrapper — SafeD1, SafeKV, SafeQueue. Every method that reads from JS must check for missing values (`None` or `jsnull`). Every method that writes to JS must convert Python types appropriately.
 
-### Safe environment access
+### App-specific environment access
 
-`self.env` attributes can be JsProxy or missing. Wrap for safety:
+`self.env` mixes string vars/secrets with binding objects (D1, KV, R2, Queues, AI, Vectorize, service bindings). Do not write a generic `SafeEnv.get() -> str`: stringifying a binding may produce a useless value like `[object SomeBinding]`.
+
+Wrap known bindings explicitly, and use separate helpers for typed config values:
 
 ```python
-class SafeEnv:
+class AppEnv:
+    """App-specific wrapper around Worker env."""
     def __init__(self, env):
         self._env = env
+        self.DB = SafeD1(env.DB)
 
-    def get(self, key: str, default: str = "") -> str:
-        return getattr(self._env, key, default)
+        queue = getattr(env, "QUEUE", None)
+        self.QUEUE = SafeQueue(queue) if not _is_missing(queue) else None
+
+    def raw(self, key: str, default=None):
+        """Return a raw env value or binding; do not coerce to str."""
+        value = getattr(self._env, key, default)
+        return default if _is_missing(value) else value
+
+
+def get_env_str(env, key: str, default: str = "") -> str:
+    """Read a string env var/secret. Do not use for bindings."""
+    value = getattr(env, key, None)
+    if _is_missing(value):
+        return default
+    if not isinstance(value, str):
+        raise TypeError(f"env.{key} is not a string env var")
+    return value
 ```
 
 ---
@@ -624,18 +643,18 @@ class Default(WorkerEntrypoint):
         return self._router
 ```
 
-### Pattern: cached wrapper
+### Pattern: cached app-specific env wrapper
 
 ```python
 class Default(WorkerEntrypoint):
-    _cached_safe_env: SafeEnv | None = None
+    _cached_app_env: AppEnv | None = None
 
     @property
-    def env(self) -> SafeEnv:
+    def env(self) -> AppEnv:
         raw_env = super().__getattribute__("_env_from_runtime")
-        if self._cached_safe_env is None:
-            self._cached_safe_env = SafeEnv(raw_env)
-        return self._cached_safe_env
+        if self._cached_app_env is None:
+            self._cached_app_env = AppEnv(raw_env)
+        return self._cached_app_env
 ```
 
 ### What you can and can't cache
@@ -643,7 +662,7 @@ class Default(WorkerEntrypoint):
 | OK to cache per-isolate | NOT OK |
 |-------------------------|--------|
 | Route dispatcher (compiled regexes) | Request-specific data |
-| SafeEnv wrapper | User sessions |
+| App-specific env/binding wrapper | User sessions |
 | "DB initialized" flag | Query results |
 | Jinja2 Environment | Mutable shared state (no locking in Workers) |
 
