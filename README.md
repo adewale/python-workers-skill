@@ -1,5 +1,7 @@
 # Python Workers Skill
 
+[![skills.sh](https://skills.sh/b/adewale/python-workers-skill)](https://skills.sh/adewale/python-workers-skill)
+
 A [Claude Code skill](https://docs.anthropic.com/en/docs/claude-code) for building [Cloudflare Workers in Python](https://developers.cloudflare.com/workers/languages/python/).
 
 Python Workers run on [Pyodide](https://pyodide.org/) (CPython compiled to WebAssembly) inside V8 isolates. This creates a unique set of challenges — the JS/Python FFI boundary, JsProxy conversion, HTTP client compatibility, cold start management, and package compatibility — that this skill addresses.
@@ -9,6 +11,8 @@ Python Workers run on [Pyodide](https://pyodide.org/) (CPython compiled to WebAs
 ```bash
 npx skills add adewale/python-workers-skill
 ```
+
+Skills appear on skills.sh automatically after users install the repo with the skills CLI. Install counts and leaderboard rankings come from anonymous CLI telemetry; opt out with `DISABLE_TELEMETRY=1`. The repo page customization in `skills.sh.json` is picked up after the repository is seen by telemetry and the cache refreshes.
 
 ## What's Covered
 

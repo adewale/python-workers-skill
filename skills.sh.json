@@ -1,0 +1,11 @@
+{
+  "$schema": "https://skills.sh/schemas/skills.sh.schema.json",
+  "notGrouped": "bottom",
+  "groupings": [
+    {
+      "title": "Python Workers",
+      "description": "Cloudflare Workers guidance for Python, Pyodide, bindings, FFI conversion, and runtime gotchas.",
+      "skills": ["python-workers"]
+    }
+  ]
+}
