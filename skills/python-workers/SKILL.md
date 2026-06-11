@@ -7,6 +7,7 @@ status: Open Beta (requires python_workers compatibility flag)
 last_verified: 2026-02-08
 references:
   - python-workers
+compatibility: Agent Skills clients including Codex, OpenCode, Pi, Gemini CLI, and Claude Code.
 ---
 
 # Cloudflare Python Workers Skill

@@ -2,7 +2,7 @@
 
 [![skills.sh](https://skills.sh/b/adewale/python-workers-skill)](https://skills.sh/adewale/python-workers-skill)
 
-A [Claude Code skill](https://docs.anthropic.com/en/docs/claude-code) for building [Cloudflare Workers in Python](https://developers.cloudflare.com/workers/languages/python/).
+An Agent Skill for building [Cloudflare Workers in Python](https://developers.cloudflare.com/workers/languages/python/).
 
 Python Workers run on [Pyodide](https://pyodide.org/) (CPython compiled to WebAssembly) inside V8 isolates. This creates a unique set of challenges — the JS/Python FFI boundary, JsProxy conversion, HTTP client compatibility, cold start management, and package compatibility — that this skill addresses.
 
@@ -13,6 +13,18 @@ npx skills add adewale/python-workers-skill
 ```
 
 Skills appear on skills.sh automatically after users install the repo with the skills CLI. Install counts and leaderboard rankings come from anonymous CLI telemetry; opt out with `DISABLE_TELEMETRY=1`. The repo page customization in `skills.sh.json` is picked up after the repository is seen by telemetry and the cache refreshes.
+
+## Agent compatibility
+
+The installable skill directory is `skills/python-workers`. It uses the Agent Skills `SKILL.md` format and is configured for Codex, OpenCode, Pi, Gemini CLI, and Claude Code.
+
+| Agent/client | Install or use |
+|---|---|
+| Codex | `cp -R skills/python-workers ~/.codex/skills/python-workers` |
+| OpenCode | `cp -R skills/python-workers ~/.config/opencode/skills/python-workers` or use `.opencode/skills/python-workers` in a project |
+| Pi | `pi install https://github.com/adewale/python-workers-skill` or `pi --skill skills/python-workers` |
+| Gemini CLI | `gemini skills install https://github.com/adewale/python-workers-skill --path skills/python-workers` or copy to `.gemini/skills/python-workers` |
+| Claude Code | `npx skills add adewale/python-workers-skill` or copy to `.claude/skills/python-workers` |
 
 ## What's Covered
 
