@@ -13,9 +13,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          # check_last_verified.py reads the history of skills/python-workers/
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           # Same minor version as the Pyodide runtime the examples target
           python-version: '3.12'
       - name: Parse fenced code blocks (python, toml, json, jsonc)
         run: python3 scripts/check_code_blocks.py
+      - name: Check last_verified against the last content change
+        run: python3 scripts/check_last_verified.py
