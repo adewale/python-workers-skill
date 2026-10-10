@@ -5,3 +5,8 @@ __pycache__/
 .env
 .dev.vars
 python-workers-workspace/
+tests/runtime/.wrangler-dev.log
+tests/runtime/.wrangler/
+tests/runtime/.venv-workers/
+tests/runtime/python_modules/
+tests/runtime/pylock.toml
