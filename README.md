@@ -76,6 +76,10 @@ CI (the `install-boundary` job in `.github/workflows/install-boundary.yml`) runs
 - `python3 scripts/check_code_blocks.py` (Python 3.12, to match Pyodide) compiles every `python` block and parses every `toml`, `json` and `jsonc` block in the tracked Markdown. `bash`, `makefile` and untagged blocks are skipped and counted.
 - `python3 scripts/check_last_verified.py` compares `SKILL.md`'s `last_verified` date with the last commit that changed `skills/python-workers/`. With `verification_status: verified`, any later content change fails the check. Bump `last_verified` only after re-checking the content against the current runtime and docs; otherwise set `verification_status: stale`. The status is currently `stale`: the content has changed since 2026-02-08, including five corrections from a Pyodide maintainer, and has not been re-verified since.
 
+One check runs by hand only, not in CI:
+
+- `python3 scripts/check_runtime_claims.py` starts the probe Worker in `tests/runtime/` under `pywrangler dev` (workerd with a local D1; nothing is deployed and no Cloudflare account is used) and compares 12 runtime observations, such as how D1 results and `jsnull` behave, with the values recorded in the script. It needs uv >= 0.12.3, Node.js and network access, because `npx` downloads an unpinned wrangler, so a new wrangler or runtime release can change the result. Run it when you change the skill's FFI or D1 guidance, or anything in `tests/runtime/`. Exit 0 means every observation matches, 1 a mismatch, 2 the probe did not start.
+
 ## Sources
 
 Built from production experience with [planet_cf](https://github.com/adewale/planet_cf) and [tasche](https://github.com/adewale/tasche), the [official Cloudflare Python Workers docs](https://developers.cloudflare.com/workers/languages/python/), and [cloudflare/python-workers-examples](https://github.com/cloudflare/python-workers-examples).
