@@ -10,8 +10,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # check_last_verified.py reads the history of skills/python-workers/
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
+          # Same minor version as the Pyodide runtime the skill's examples target,
+          # so check_code_blocks.py rejects syntax that Workers cannot run.
+          python-version: '3.12'
       - name: Check installable skill boundary
         run: python3 scripts/check_install_boundary.py
+      - name: Parse fenced code blocks (python, toml, json, jsonc)
+        run: python3 scripts/check_code_blocks.py
+      - name: Check last_verified against the last content change
+        run: python3 scripts/check_last_verified.py
