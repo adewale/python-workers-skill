@@ -1,0 +1,16 @@
+// Probe Worker for scripts/check_runtime_claims.py. Local only: never deployed.
+{
+  "name": "python-workers-skill-runtime-probe",
+  "main": "src/entry.py",
+  // The earliest date the skill supports (gotchas.md #1: pre-Dec 2025 Workers need migrating)
+  "compatibility_date": "2025-12-01",
+  "compatibility_flags": ["python_workers"],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "probe",
+      // Placeholder: `wrangler dev` runs D1 locally and never contacts this database
+      "database_id": "00000000-0000-0000-0000-000000000000"
+    }
+  ]
+}

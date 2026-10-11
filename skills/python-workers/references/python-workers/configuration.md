@@ -51,7 +51,7 @@ These are the fields that are **different or especially important** for Python W
     "directory": "./assets/"
     // No "binding" needed unless you also want programmatic access
     // Requests to files in this directory never invoke your Worker
-  }
+  },
 
   // Cron triggers
   "triggers": {

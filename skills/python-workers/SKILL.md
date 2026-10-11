@@ -5,6 +5,7 @@ version: 0.2.0
 runtime: Pyodide (CPython 3.12+ compiled to WebAssembly)
 status: Open Beta (requires python_workers compatibility flag)
 last_verified: 2026-02-08
+verification_status: stale
 references:
   - python-workers
 compatibility: Agent Skills clients including Codex, OpenCode, Pi, Gemini CLI, and Claude Code.
@@ -158,11 +159,13 @@ class Default(WorkerEntrypoint):
     async def fetch(self, request):
         if path.startswith("/static/"):
             return await self.env.ASSETS.fetch(request)  # Worker is already awake!
+```
 
-# ALWAYS — let Workers Static Assets serve directly from the edge
-# Configure in wrangler.jsonc — requests to /static/ never reach your Python code
+```jsonc
+// ALWAYS — let Workers Static Assets serve directly from the edge
+// Configure in wrangler.jsonc — requests to /static/ never reach your Python code
 "assets": { "directory": "./assets/" }
-# No binding needed. No Worker invocation. ~15-90ms TTFB.
+// No binding needed. No Worker invocation. ~15-90ms TTFB.
 ```
 
 ### Python bytes to Binary APIs
